@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { saveDocument } from '@/lib/document-store'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { DocumentService, DocumentUploadData } from '@/lib/services/document.service'
+import { prisma } from '@/lib/database'
 
 export async function POST(req: NextRequest) {
   console.log('---[/api/upload] - POST request received---')
