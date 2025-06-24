@@ -6,6 +6,7 @@ import { FileUploader } from '@/components/FileUploader'
 import { DocumentList } from '@/components/DocumentList'
 import { SearchBar } from '@/components/SearchBar'
 import { DocumentViewer } from '@/components/DocumentViewer'
+import { MedicalIntelligence } from '@/components/MedicalIntelligence'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -24,9 +25,16 @@ import {
   Bell,
   User,
   Key,
-  X
+  X,
+  Scan,
+  Eye,
+  Copy,
+  Loader2
 } from 'lucide-react'
 import { SettingsDialog } from '@/components/SettingsDialog'
+import { OCRService } from '@/lib/ocr-service'
+import { useDropzone } from 'react-dropzone'
+import { useToast } from '@/components/ui/use-toast'
 
 export default function Dashboard() {
   const router = useRouter()
@@ -38,6 +46,11 @@ export default function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeSection, setActiveSection] = useState<string>('dashboard')
+  const [ocrResult, setOcrResult] = useState<any>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false)
+  const { toast } = useToast()
   const [stats, setStats] = useState({
     totalDocuments: 0,
     recentUploads: 0,
@@ -173,6 +186,67 @@ export default function Dashboard() {
     }))
   }
 
+  // OCR functionality
+  const onDropOCR = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0]
+    if (file) {
+      setSelectedFile(file)
+      
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file)
+        setPreviewUrl(url)
+      }
+      
+      setOcrResult(null)
+    }
+  }
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: onDropOCR,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']
+    },
+    multiple: false,
+    maxSize: 10 * 1024 * 1024
+  })
+
+  const processOCR = async () => {
+    if (!selectedFile) return
+
+    setIsProcessingOCR(true)
+    
+    try {
+      const result = await OCRService.extractText(selectedFile)
+      setOcrResult(result)
+      
+      toast({
+        title: "OCR Completed",
+        description: `Extracted ${result.text.length} characters with ${(result.confidence * 100).toFixed(1)}% confidence`,
+      })
+    } catch (error) {
+      console.error('[OCR] Error:', error)
+      toast({
+        title: "OCR Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessingOCR(false)
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast({
+        title: "Copied",
+        description: "Text copied to clipboard",
+      })
+    } catch (error) {
+      console.error('Copy failed:', error)
+    }
+  }
+
   const safeDocuments = Array.isArray(documents) ? documents : []
   const filteredDocuments = selectedCategory === 'all' 
     ? safeDocuments 
@@ -272,6 +346,22 @@ export default function Dashboard() {
                 >
                   <Upload className="mr-3 h-4 w-4" />
                   Upload Documents
+                </Button>
+                <Button
+                  variant={activeSection === 'intelligence' ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setActiveSection('intelligence')}
+                >
+                  <Activity className="mr-3 h-4 w-4" />
+                  Medical Intelligence
+                </Button>
+                <Button
+                  variant={activeSection === 'ocr' ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setActiveSection('ocr')}
+                >
+                  <Scan className="mr-3 h-4 w-4" />
+                  OCR Testing
                 </Button>
               </div>
 
@@ -455,6 +545,174 @@ export default function Dashboard() {
                     />
                   </Card>
                 )}
+              </div>
+            )}
+
+            {/* Medical Intelligence Section */}
+            {activeSection === 'intelligence' && (
+              <div className="space-y-8">
+                <MedicalIntelligence documents={safeDocuments} />
+              </div>
+            )}
+
+            {/* OCR Testing Section */}
+            {activeSection === 'ocr' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900">OCR Testing Lab</h2>
+                  <p className="text-gray-600 mt-1">
+                    Test OCR capabilities on medical documents and images using Tesseract.js
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Upload Section */}
+                  <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
+                    <h3 className="text-xl font-semibold mb-4 flex items-center">
+                      <Upload className="h-5 w-5 mr-2" />
+                      Upload Image for OCR
+                    </h3>
+                    
+                    <div
+                      {...getRootProps()}
+                      className={`
+                        border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
+                        ${isDragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-gray-400'}
+                      `}
+                    >
+                      <input {...getInputProps()} />
+                      
+                      {previewUrl ? (
+                        <div className="space-y-4">
+                          <img
+                            src={previewUrl}
+                            alt="Preview"
+                            className="max-w-full max-h-48 mx-auto rounded-lg shadow-md"
+                          />
+                          <p className="text-sm text-gray-600">
+                            {selectedFile?.name}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Scan className="h-12 w-12 text-gray-400 mx-auto" />
+                          <p className="text-lg font-medium text-gray-700">
+                            Drag & drop an image here
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            or click to select (PNG, JPG, etc.)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedFile && (
+                      <div className="mt-4">
+                        <Button
+                          onClick={processOCR}
+                          disabled={isProcessingOCR}
+                          className="w-full"
+                        >
+                          {isProcessingOCR ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Processing OCR...
+                            </>
+                          ) : (
+                            <>
+                              <Scan className="h-4 w-4 mr-2" />
+                              Extract Text
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Results Section */}
+                  <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
+                    <h3 className="text-xl font-semibold mb-4 flex items-center">
+                      <Eye className="h-5 w-5 mr-2" />
+                      OCR Results
+                    </h3>
+
+                    {ocrResult ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                          <div>
+                            <p className="text-sm text-gray-600">Confidence</p>
+                            <p className="font-semibold text-green-600">
+                              {(ocrResult.confidence * 100).toFixed(1)}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Processing Time</p>
+                            <p className="font-semibold">{ocrResult.processingTime}ms</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Method</p>
+                            <p className="font-semibold capitalize">{ocrResult.method}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Characters</p>
+                            <p className="font-semibold">{ocrResult.text.length}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(ocrResult.text)}
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy Text
+                          </Button>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium mb-2">Extracted Text:</h4>
+                          <div className="bg-white border rounded-lg p-4 max-h-64 overflow-y-auto">
+                            <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                              {ocrResult.text || 'No text extracted'}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        <Scan className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p>Upload an image to see OCR results</p>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                {/* Sample Medical Documents Info */}
+                <Card className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200">
+                  <h3 className="text-xl font-semibold mb-4 text-purple-900">Sample Medical Documents</h3>
+                  <p className="text-purple-700 mb-4">
+                    Try these sample medical document types to test OCR accuracy:
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
+                      <strong className="text-purple-900">Prescriptions</strong>
+                      <p className="text-purple-600">Medication names, dosages, instructions</p>
+                    </div>
+                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
+                      <strong className="text-purple-900">Lab Results</strong>
+                      <p className="text-purple-600">Blood tests, values, reference ranges</p>
+                    </div>
+                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
+                      <strong className="text-purple-900">Medical Bills</strong>
+                      <p className="text-purple-600">Charges, procedures, insurance info</p>
+                    </div>
+                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
+                      <strong className="text-purple-900">Handwritten Notes</strong>
+                      <p className="text-purple-600">Doctor notes, patient information</p>
+                    </div>
+                  </div>
+                </Card>
               </div>
             )}
           </div>

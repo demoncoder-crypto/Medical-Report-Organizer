@@ -1,5 +1,5 @@
-// Simple storage for demo - in production, use a proper database like Supabase
-// For Vercel deployment, we'll use a combination of approaches
+// Document storage - Vercel Postgres + localStorage fallback
+import { sql } from '@vercel/postgres'
 
 interface StoredDocument {
   id: string
@@ -54,14 +54,74 @@ const demoDocuments: StoredDocument[] = [
 // In a real production app, you'd use a database like Supabase, PlanetScale, or MongoDB
 let persistentStorage: StoredDocument[] = []
 
-export async function getDocuments(): Promise<StoredDocument[]> {
+export async function getDocuments(userId?: string): Promise<StoredDocument[]> {
   console.log('[Storage] Getting documents...')
   
-  // For demo purposes, combine demo documents with any uploaded ones
-  const allDocuments = [...demoDocuments, ...persistentStorage]
+  // Try to get from Vercel Postgres first
+  try {
+    await initializeDatabase()
+    const result = await sql`
+      SELECT id, name, type, date, doctor, hospital, summary, tags, content 
+      FROM documents 
+      ORDER BY date DESC
+    `
+    
+    const dbDocuments = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      type: row.type as 'prescription' | 'lab_report' | 'bill' | 'test_report' | 'other',
+      date: new Date(row.date),
+      doctor: row.doctor || undefined,
+      hospital: row.hospital || undefined,
+      summary: row.summary || undefined,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? JSON.parse(row.tags) : []),
+      content: row.content || undefined
+    }))
+    
+    console.log(`[Storage] Returning ${dbDocuments.length} documents from Vercel Postgres`)
+    return [...dbDocuments, ...demoDocuments] // Include demo data for now
+  } catch (dbError) {
+    console.warn('[Storage] Database error, falling back to demo data:', dbError)
+  }
   
+  // Fallback to demo documents
+  const allDocuments = [...demoDocuments, ...persistentStorage]
   console.log(`[Storage] Returning ${allDocuments.length} documents`)
   return allDocuments
+}
+
+function mapDocumentType(dbType: string): 'prescription' | 'lab_report' | 'bill' | 'test_report' | 'other' {
+  switch (dbType) {
+    case 'PRESCRIPTION': return 'prescription'
+    case 'LAB_RESULT': return 'lab_report'
+    case 'MEDICAL_BILL': return 'bill'
+    case 'IMAGING_REPORT': return 'test_report'
+    default: return 'other'
+  }
+}
+
+// Initialize database table if it doesn't exist
+async function initializeDatabase() {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        doctor TEXT,
+        hospital TEXT,
+        summary TEXT,
+        tags TEXT,
+        content TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+    console.log('[Storage] Database table initialized')
+  } catch (error) {
+    console.error('[Storage] Database initialization error:', error)
+    throw error
+  }
 }
 
 export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalFile?: File }) {
@@ -76,13 +136,26 @@ export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalF
   // Remove the file object before storing
   const { originalFile, ...docToStore } = doc as any
   
-  // Add to persistent storage
-  persistentStorage.push(newDoc)
+  // Try to save to Vercel Postgres first
+  try {
+    await initializeDatabase()
+    await sql`
+      INSERT INTO documents (id, name, type, date, doctor, hospital, summary, tags, content)
+      VALUES (${newDoc.id}, ${newDoc.name}, ${newDoc.type}, ${newDoc.date.toISOString()}, 
+              ${newDoc.doctor || null}, ${newDoc.hospital || null}, ${newDoc.summary || null}, 
+              ${JSON.stringify(newDoc.tags)}, ${newDoc.content || null})
+    `
+    console.log('[Storage] Document saved to Vercel Postgres successfully')
+  } catch (dbError) {
+    console.warn('[Storage] Database save failed, using local storage:', dbError)
+    // Fallback to persistent storage
+    persistentStorage.push(newDoc)
+  }
   
   // Also add to cache for immediate access
   documentsCache.push(newDoc)
   
-  console.log('[Storage] Document saved successfully. Total uploaded:', persistentStorage.length)
+  console.log('[Storage] Document saved successfully')
   
   return newDoc
 }
