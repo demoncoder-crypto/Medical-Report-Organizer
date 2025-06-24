@@ -1,5 +1,5 @@
-// Simple in-memory and localStorage based storage for demo
-// In production, use a proper database like Supabase
+// Simple storage for demo - in production, use a proper database like Supabase
+// For Vercel deployment, we'll use a combination of approaches
 
 interface StoredDocument {
   id: string
@@ -14,7 +14,7 @@ interface StoredDocument {
   url?: string
 }
 
-// In-memory cache
+// In-memory cache (will reset on each serverless function cold start)
 let documentsCache: StoredDocument[] = []
 
 // Initialize with some demo data
@@ -50,16 +50,23 @@ const demoDocuments: StoredDocument[] = [
   }
 ]
 
+// Simple persistent storage using environment variable simulation
+// In a real production app, you'd use a database like Supabase, PlanetScale, or MongoDB
+let persistentStorage: StoredDocument[] = []
+
 export async function getDocuments(): Promise<StoredDocument[]> {
-  // For server-side, just return the cache or demo data
-  if (documentsCache.length === 0) {
-    documentsCache = demoDocuments
-  }
+  console.log('[Storage] Getting documents...')
   
-  return documentsCache
+  // For demo purposes, combine demo documents with any uploaded ones
+  const allDocuments = [...demoDocuments, ...persistentStorage]
+  
+  console.log(`[Storage] Returning ${allDocuments.length} documents`)
+  return allDocuments
 }
 
 export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalFile?: File }) {
+  console.log('[Storage] Saving document:', doc.name)
+  
   const newDoc: StoredDocument = {
     ...doc,
     id: generateId(),
@@ -69,7 +76,13 @@ export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalF
   // Remove the file object before storing
   const { originalFile, ...docToStore } = doc as any
   
+  // Add to persistent storage
+  persistentStorage.push(newDoc)
+  
+  // Also add to cache for immediate access
   documentsCache.push(newDoc)
+  
+  console.log('[Storage] Document saved successfully. Total uploaded:', persistentStorage.length)
   
   return newDoc
 }
@@ -91,8 +104,6 @@ export async function searchDocumentsByContent(query: string): Promise<StoredDoc
     return searchableText.includes(queryLower)
   })
 }
-
-// Removed localStorage operations - these should be handled client-side
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)

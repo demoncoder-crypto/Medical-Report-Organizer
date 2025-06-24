@@ -39,6 +39,23 @@ export function FileUploader({ onUploadSuccess }: FileUploaderProps) {
         if (!response.ok) {
           throw new Error(result.error || 'Upload failed')
         }
+
+        // Save uploaded document to localStorage for Vercel persistence
+        if (result.document) {
+          try {
+            const stored = localStorage.getItem('medivault-documents')
+            const existingDocs = stored ? JSON.parse(stored) : []
+            
+            // Add new document (avoid duplicates by ID)
+            if (!existingDocs.find((doc: any) => doc.id === result.document.id)) {
+              existingDocs.push(result.document)
+              localStorage.setItem('medivault-documents', JSON.stringify(existingDocs))
+              console.log('[FileUploader] Document saved to localStorage:', result.document.name)
+            }
+          } catch (error) {
+            console.error('Error saving to localStorage:', error)
+          }
+        }
         
         toast({
           title: "Document uploaded",

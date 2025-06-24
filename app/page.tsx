@@ -98,22 +98,84 @@ export default function Home() {
   const loadDocuments = async () => {
     try {
       console.log('[Frontend] Loading documents...')
+      
+      // Load documents from API
       const response = await fetch('/api/documents')
       if (response.ok) {
         const docs = await response.json()
-        console.log('[Frontend] Received docs:', docs)
+        console.log('[Frontend] Received docs from API:', docs)
+        
         // Ensure docs is always an array
         const docsArray = Array.isArray(docs) ? docs : (docs.documents && Array.isArray(docs.documents)) ? docs.documents : []
-        console.log('[Frontend] Setting documents:', docsArray.length, 'documents')
-        setDocuments(docsArray)
-        calculateStats(docsArray)
+        
+        // Load any client-side stored documents (for Vercel persistence)
+        const clientDocs = loadClientDocuments()
+        
+        // Combine server docs with client docs (remove duplicates by ID)
+        const allDocs = [...docsArray]
+        clientDocs.forEach((clientDoc: any) => {
+          if (!allDocs.find(doc => doc.id === clientDoc.id)) {
+            allDocs.push(clientDoc)
+          }
+        })
+        
+        console.log('[Frontend] Total documents after combining:', allDocs.length)
+        setDocuments(allDocs)
+        calculateStats(allDocs)
       } else {
         console.error('[Frontend] Response not ok:', response.status, response.statusText)
+        // Fallback to client-side documents only
+        const clientDocs = loadClientDocuments()
+        setDocuments(clientDocs)
+        calculateStats(clientDocs)
       }
     } catch (error) {
       console.error('Failed to load documents:', error)
-      setDocuments([]) // Set empty array on error
+      // Fallback to client-side documents
+      const clientDocs = loadClientDocuments()
+      setDocuments(clientDocs)
+      calculateStats(clientDocs)
     }
+  }
+
+  // Helper function to load documents from localStorage (client-side persistence)
+  const loadClientDocuments = () => {
+    if (typeof window === 'undefined') return []
+    
+    try {
+      const stored = localStorage.getItem('medivault-documents')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        // Convert date strings back to Date objects
+        return parsed.map((doc: any) => ({
+          ...doc,
+          date: new Date(doc.date)
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading client documents:', error)
+    }
+    return []
+  }
+
+  // Helper function to save documents to localStorage (client-side persistence)
+  const saveClientDocuments = (docs: any[]) => {
+    if (typeof window === 'undefined') return
+    
+    try {
+      localStorage.setItem('medivault-documents', JSON.stringify(docs))
+    } catch (error) {
+      console.error('Error saving client documents:', error)
+    }
+  }
+
+  // Enhanced loadDocuments function that handles successful uploads
+  const handleUploadSuccess = async () => {
+    console.log('[Frontend] Upload successful, refreshing documents...')
+    // Small delay to ensure localStorage is updated
+    setTimeout(async () => {
+      await loadDocuments()
+    }, 100)
   }
 
   const calculateStats = (docs: any[]) => {
@@ -477,7 +539,7 @@ export default function Home() {
                         Bulk Upload
                       </Button>
                     </div>
-                    <FileUploader onUploadSuccess={loadDocuments} />
+                    <FileUploader onUploadSuccess={handleUploadSuccess} />
                   </Card>
 
                   {/* Quick Stats */}
@@ -561,7 +623,7 @@ export default function Home() {
                       Bulk Upload
                     </Button>
                   </div>
-                  <FileUploader onUploadSuccess={loadDocuments} />
+                  <FileUploader onUploadSuccess={handleUploadSuccess} />
                 </Card>
               </div>
             )}
