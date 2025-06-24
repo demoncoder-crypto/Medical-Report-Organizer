@@ -56,10 +56,10 @@ export function SettingsDialog({ isOpen, setIsOpen }: SettingsDialogProps) {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <DialogTitle>Google Gemini API Key</DialogTitle>
           <DialogDescription>
-            Manage your application settings here. Your API key is stored securely
-            in your browser and is never sent to our servers.
+            Configure your Google Gemini API key to enable AI-powered document analysis. 
+            Your API key is stored securely in your browser and is never sent to our servers.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

@@ -1,11 +1,7 @@
-import { PrismaClient } from '@prisma/client'
+// Database connection placeholder
+// Will be configured when DATABASE_URL is available
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: ['query'],
-})
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+export const prisma = {
+  // Placeholder for Prisma client
+  // Will be initialized when database is connected
+} 

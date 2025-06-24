@@ -1,62 +1,37 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { FileUploader } from '@/components/FileUploader'
 import { DocumentList } from '@/components/DocumentList'
 import { SearchBar } from '@/components/SearchBar'
-import { DocumentViewer } from '@/components/DocumentViewer'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
   FileText, 
-  Search, 
   Calendar, 
   Settings, 
-  AlertCircle, 
   Upload,
   Activity,
-  Users,
-  FileCheck,
   TrendingUp,
-  Clock,
-  Shield,
-  BarChart3,
-  PieChart,
-  Filter,
-  Download,
-  Share2,
-  Eye,
-  Plus,
-  Stethoscope,
-  Building2,
-  UserCheck,
-  Zap,
   Database,
   Menu,
-  X,
-  Home as HomeIcon,
+  Building2,
+  HomeIcon,
   Folder,
-  Star,
-  Archive,
-  Trash2,
-  Tag,
+  BarChart3,
   Bell,
-  HelpCircle,
-  LogOut,
   User,
-  Crown,
-  Shield as ShieldIcon
+  Key
 } from 'lucide-react'
-import { SettingsDialog } from '@/components/SettingsDialog'
+import { SettingsDialog } from '@/components/SettingsDialog' // Now used for Gemini API Key configuration
 
 export default function Dashboard() {
-  const { data: session, status } = useSession()
   const router = useRouter()
   const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -72,42 +47,30 @@ export default function Dashboard() {
       bill: 0,
       test_report: 0,
       other: 0
-    },
-    monthlyTrend: [
-      { month: 'Jan', count: 45 },
-      { month: 'Feb', count: 52 },
-      { month: 'Mar', count: 48 },
-      { month: 'Apr', count: 61 },
-      { month: 'May', count: 55 },
-      { month: 'Jun', count: 67 }
-    ]
+    }
   })
 
-  // Redirect to signin if not authenticated
   useEffect(() => {
-    if (status === 'loading') return // Still loading
-    if (!session) {
-      router.push('/auth/signin')
-      return
-    }
-  }, [session, status, router])
+    // Check if API key exists
+    const apiKey = localStorage.getItem('gemini-api-key')
+    setHasApiKey(!!apiKey)
+    
+    loadDocuments()
+  }, [])
 
+  // Update API key status when settings dialog closes
   useEffect(() => {
-    if (session) {
-      loadDocuments()
+    if (!isSettingsOpen) {
+      const apiKey = localStorage.getItem('gemini-api-key')
+      setHasApiKey(!!apiKey)
     }
-  }, [session])
+  }, [isSettingsOpen])
 
   const loadDocuments = async () => {
     try {
-      console.log('[Dashboard] Loading documents for user:', session?.user?.id)
+      console.log('[Dashboard] Loading documents...')
       
-      // Load documents from API with authentication
-      const response = await fetch('/api/documents', {
-        headers: {
-          'Authorization': `Bearer ${session?.user?.id}`,
-        }
-      })
+      const response = await fetch('/api/documents')
       
       if (response.ok) {
         const docs = await response.json()
@@ -131,14 +94,12 @@ export default function Dashboard() {
         calculateStats(allDocs)
       } else {
         console.error('[Dashboard] Response not ok:', response.status, response.statusText)
-        // Fallback to client-side documents only
         const clientDocs = loadClientDocuments()
         setDocuments(clientDocs)
         calculateStats(clientDocs)
       }
     } catch (error) {
       console.error('Failed to load documents:', error)
-      // Fallback to client-side documents
       const clientDocs = loadClientDocuments()
       setDocuments(clientDocs)
       calculateStats(clientDocs)
@@ -210,59 +171,10 @@ export default function Dashboard() {
     }))
   }
 
-  const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/auth/signin' })
-  }
-
   const safeDocuments = Array.isArray(documents) ? documents : []
   const filteredDocuments = selectedCategory === 'all' 
     ? safeDocuments 
     : safeDocuments.filter((doc: any) => doc.type === selectedCategory)
-
-  // Show loading while checking authentication
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Don't render if not authenticated (will redirect)
-  if (!session) {
-    return null
-  }
-
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'DOCTOR':
-        return <Stethoscope className="h-4 w-4" />
-      case 'ADMIN':
-      case 'HOSPITAL_ADMIN':
-        return <Crown className="h-4 w-4" />
-      case 'NURSE':
-        return <UserCheck className="h-4 w-4" />
-      default:
-        return <User className="h-4 w-4" />
-    }
-  }
-
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'DOCTOR':
-        return 'bg-green-100 text-green-800'
-      case 'ADMIN':
-      case 'HOSPITAL_ADMIN':
-        return 'bg-purple-100 text-purple-800'
-      case 'NURSE':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -295,24 +207,16 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* User Info */}
               <div className="hidden sm:flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{session.user.name || session.user.email}</p>
+                  <p className="text-sm font-medium text-gray-900">Demo User</p>
                   <div className="flex items-center justify-end space-x-1">
-                    {getRoleIcon(session.user.role)}
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(session.user.role)}`}>
-                      {session.user.role}
+                    <User className="h-4 w-4" />
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      PATIENT
                     </span>
                   </div>
                 </div>
-                {session.user.image && (
-                  <img
-                    src={session.user.image}
-                    alt="Profile"
-                    className="h-10 w-10 rounded-full border-2 border-blue-200"
-                  />
-                )}
               </div>
 
               <Button variant="outline" size="icon">
@@ -320,18 +224,15 @@ export default function Dashboard() {
               </Button>
               <Button 
                 variant="outline" 
-                size="icon" 
+                size="sm" 
                 onClick={() => setIsSettingsOpen(true)}
+                className="relative flex items-center gap-2 px-3"
               >
-                <Settings className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={handleSignOut}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <LogOut className="h-4 w-4" />
+                <Key className="h-4 w-4" />
+                <span className="hidden sm:inline">API Key</span>
+                {!hasApiKey && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                )}
               </Button>
             </div>
           </div>
@@ -408,58 +309,6 @@ export default function Dashboard() {
                     {stats.categories.lab_report}
                   </span>
                 </Button>
-                <Button
-                  variant={selectedCategory === 'bill' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedCategory('bill')}
-                >
-                  <FileCheck className="mr-3 h-4 w-4" />
-                  Medical Bills
-                  <span className="ml-auto bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {stats.categories.bill}
-                  </span>
-                </Button>
-                <Button
-                  variant={selectedCategory === 'test_report' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedCategory('test_report')}
-                >
-                  <BarChart3 className="mr-3 h-4 w-4" />
-                  Test Reports
-                  <span className="ml-auto bg-purple-100 text-purple-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {stats.categories.test_report}
-                  </span>
-                </Button>
-              </div>
-
-              {/* Organization Section */}
-              <div className="space-y-1 pt-4">
-                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Organization</h3>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Star className="mr-3 h-4 w-4" />
-                  Favorites
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Clock className="mr-3 h-4 w-4" />
-                  Recent
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Archive className="mr-3 h-4 w-4" />
-                  Archived
-                </Button>
-              </div>
-
-              {/* Tools Section */}
-              <div className="space-y-1 pt-4">
-                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tools</h3>
-                <Button variant="ghost" className="w-full justify-start">
-                  <PieChart className="mr-3 h-4 w-4" />
-                  Analytics
-                </Button>
-                <Button variant="ghost" className="w-full justify-start">
-                  <Search className="mr-3 h-4 w-4" />
-                  Advanced Search
-                </Button>
               </div>
             </nav>
           </div>
@@ -482,10 +331,10 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900">
-                      Welcome back, {session.user.name?.split(' ')[0] || 'User'}!
+                      Welcome to MediVault Pro!
                     </h2>
                     <p className="text-gray-600 mt-1">
-                      Here's an overview of your medical documents and health data.
+                      Your comprehensive medical document management system.
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -507,8 +356,8 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Real-time Stats Dashboard */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Stats Dashboard */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between">
                       <div>
@@ -525,9 +374,9 @@ export default function Dashboard() {
                   <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-green-600">Today's Uploads</p>
-                        <p className="text-3xl font-bold text-green-900">{stats.todayUploads}</p>
-                        <p className="text-xs text-green-600 mt-1">+{stats.recentUploads} this week</p>
+                        <p className="text-sm font-medium text-green-600">Recent Uploads</p>
+                        <p className="text-3xl font-bold text-green-900">{stats.recentUploads}</p>
+                        <p className="text-xs text-green-600 mt-1">This week</p>
                       </div>
                       <div className="p-3 bg-green-500 rounded-full">
                         <TrendingUp className="h-6 w-6 text-white" />
@@ -543,20 +392,7 @@ export default function Dashboard() {
                         <p className="text-xs text-purple-600 mt-1">Average time</p>
                       </div>
                       <div className="p-3 bg-purple-500 rounded-full">
-                        <Zap className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-orange-600">System Status</p>
-                        <p className="text-2xl font-bold text-orange-900">Healthy</p>
-                        <p className="text-xs text-orange-600 mt-1">All systems operational</p>
-                      </div>
-                      <div className="p-3 bg-orange-500 rounded-full">
-                        <ShieldIcon className="h-6 w-6 text-white" />
+                        <BarChart3 className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </Card>
@@ -573,21 +409,11 @@ export default function Dashboard() {
                     <h3 className="text-xl font-semibold text-gray-900">
                       {selectedCategory === 'all' ? 'All Documents' : `${selectedCategory.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Documents`}
                     </h3>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filter
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                      </Button>
-                    </div>
                   </div>
                   <DocumentList 
                     documents={filteredDocuments} 
                     viewMode={viewMode}
-                    onDocumentSelect={setSelectedDocument}
+                    onSelectDocument={(doc) => setSelectedDocument(doc)}
                   />
                 </Card>
               </div>
@@ -609,10 +435,6 @@ export default function Dashboard() {
                       <h3 className="text-xl font-semibold text-gray-900">Document Upload</h3>
                       <p className="text-gray-600">Drag and drop files or click to browse</p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Bulk Upload
-                    </Button>
                   </div>
                   <FileUploader onUploadSuccess={handleUploadSuccess} />
                 </Card>
@@ -624,7 +446,7 @@ export default function Dashboard() {
                     <DocumentList 
                       documents={filteredDocuments.slice(0, 5)} 
                       viewMode="grid"
-                      onDocumentSelect={setSelectedDocument}
+                      onSelectDocument={(doc) => setSelectedDocument(doc)}
                     />
                   </Card>
                 )}
@@ -633,27 +455,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {/* Document Viewer Modal */}
-      {selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-xl font-semibold">Document Details</h3>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => setSelectedDocument(null)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            <div className="p-6">
-              <DocumentViewer document={selectedDocument} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 } 
