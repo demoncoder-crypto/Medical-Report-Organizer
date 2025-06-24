@@ -3,12 +3,17 @@ import type { NextRequest } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { searchDocumentsByContent } from '@/lib/document-store'
 
-// Initialize Gemini client on the server
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
-
 export async function POST(req: NextRequest) {
   try {
+    const userApiKey = req.headers.get('X-Gemini-Api-Key')
+    const apiKey = userApiKey || process.env.GEMINI_API_KEY
+
+    if (!apiKey) {
+      return NextResponse.json({ success: false, error: 'API key is missing.' }, { status: 400 })
+    }
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+
     const body = await req.json()
     const { query } = body
 
@@ -21,12 +26,12 @@ export async function POST(req: NextRequest) {
     
     if (documents.length === 0) {
       // Try semantic search with AI if no keyword matches
-      const results = await semanticSearch(query)
+      const results = await semanticSearch(query, model)
       return NextResponse.json({ success: true, results })
     }
     
     // Use AI to rank and summarize the results
-    const results = await enhanceSearchResults(query, documents)
+    const results = await enhanceSearchResults(query, documents, model)
     return NextResponse.json({ success: true, results })
 
   } catch (error) {
@@ -46,7 +51,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ... (semanticSearch and enhanceSearchResults functions from lib/search.ts go here)
-async function semanticSearch(query: string) {
+async function semanticSearch(query: string, model: any) {
   const allDocs = await searchDocumentsByContent('')
   
   const prompt = `
@@ -70,7 +75,7 @@ async function semanticSearch(query: string) {
   return JSON.parse(response.text()).results || []
 }
 
-async function enhanceSearchResults(query: string, documents: any[]) {
+async function enhanceSearchResults(query: string, documents: any[], model: any) {
   const enhancedResults = []
   
   for (const doc of documents.slice(0, 5)) {

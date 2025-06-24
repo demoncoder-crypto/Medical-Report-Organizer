@@ -1,19 +1,37 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FileUploader } from '@/components/FileUploader'
 import { DocumentList } from '@/components/DocumentList'
 import { SearchBar } from '@/components/SearchBar'
 import { DocumentViewer } from '@/components/DocumentViewer'
 import { Button } from '@/components/ui/button'
-import { FileText, Search, Calendar, Settings } from 'lucide-react'
+import { FileText, Search, Calendar, Settings, AlertCircle, Key } from 'lucide-react'
+import { SettingsDialog } from '@/components/SettingsDialog'
 
 export default function Home() {
-  const [selectedDocument, setSelectedDocument] = useState(null)
+  const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid')
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(false)
+
+  useEffect(() => {
+    // Check if API key exists
+    const apiKey = localStorage.getItem('gemini-api-key')
+    setHasApiKey(!!apiKey)
+  }, [])
+
+  // Update API key status when settings dialog closes
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      const apiKey = localStorage.getItem('gemini-api-key')
+      setHasApiKey(!!apiKey)
+    }
+  }, [isSettingsOpen])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <SettingsDialog isOpen={isSettingsOpen} setIsOpen={setIsSettingsOpen} />
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -38,13 +56,40 @@ export default function Home() {
                 <Calendar className="h-4 w-4 mr-2" />
                 Timeline
               </Button>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" onClick={() => setIsSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* API Key Banner - Shows when no API key is detected */}
+      {!hasApiKey && (
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mx-4 mt-4 rounded-r-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-amber-400 mr-3" />
+              <div>
+                <h3 className="text-sm font-medium text-amber-800">
+                  API Key Required
+                </h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  Please add your Google Gemini API key to enable AI-powered document analysis and search.
+                </p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              size="sm"
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Add API Key
+            </Button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Upload Section */}

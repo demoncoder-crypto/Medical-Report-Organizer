@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { getApiKey } from '@/lib/api-key'
 
 export function FileUploader() {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -17,8 +18,15 @@ export function FileUploader() {
         const formData = new FormData()
         formData.append('file', file)
 
+        const apiKey = getApiKey()
+        const headers = new Headers()
+        if (apiKey) {
+          headers.append('X-Gemini-Api-Key', apiKey)
+        }
+
         const response = await fetch('/api/upload', {
           method: 'POST',
+          headers,
           body: formData,
         })
 

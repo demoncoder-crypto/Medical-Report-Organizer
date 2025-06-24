@@ -7,15 +7,19 @@ import path from 'path'
 import fs from 'fs/promises'
 import os from 'os'
 
-// Initialize Gemini client
-const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyAt_7srtL_OpPg5e08_O35_uRr8gD2i51o'
-console.log('[API] Initializing Gemini with API key:', apiKey ? 'Present' : 'Missing')
-const genAI = new GoogleGenerativeAI(apiKey)
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
-
 export async function POST(req: NextRequest) {
-  console.log('---[/api/upload] - (Step 2: PDF Parsing Enabled)---')
+  console.log('---[/api/upload] - POST request received---')
   try {
+    const userApiKey = req.headers.get('X-Gemini-Api-Key')
+    const apiKey = userApiKey || process.env.GEMINI_API_KEY
+    
+    if (!apiKey) {
+      console.error('[API] Gemini API key is missing.')
+      return NextResponse.json({ success: false, error: 'Server is not configured for AI processing. Please provide an API key in settings.' }, { status: 500 })
+    }
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+
     const data = await req.formData()
     const file = data.get('file') as File | null
 
@@ -36,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Analyze with AI
     let aiAnalysis
     try {
-      aiAnalysis = await analyzeDocument(text, file.name)
+      aiAnalysis = await analyzeDocument(text, file.name, model)
       console.log('[API] AI analysis complete.')
     } catch (aiError) {
       console.error('[API] AI analysis failed:', aiError)
@@ -127,7 +131,7 @@ async function extractText(fileType: string, buffer: Buffer, fileName: string): 
   return buffer.toString()
 }
 
-async function analyzeDocument(text: string, fileName: string) {
+async function analyzeDocument(text: string, fileName: string, model: any) {
   const prompt = `
   Analyze this medical document and provide:
   1. Category: One of [prescription, lab_report, bill, test_report, other]

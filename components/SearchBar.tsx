@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { searchDocuments } from '@/lib/search'
+import { getApiKey } from '@/lib/api-key'
 
 export function SearchBar() {
   const [query, setQuery] = useState('')
@@ -16,11 +16,15 @@ export function SearchBar() {
     setIsSearching(true)
     setResults([])
     try {
+      const apiKey = getApiKey()
+      const headers = new Headers({ 'Content-Type': 'application/json' })
+      if (apiKey) {
+        headers.append('X-Gemini-Api-Key', apiKey)
+      }
+
       const response = await fetch('/api/search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ query }),
       })
 
