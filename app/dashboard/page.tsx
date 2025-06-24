@@ -24,7 +24,7 @@ import {
   User,
   Key
 } from 'lucide-react'
-import { SettingsDialog } from '@/components/SettingsDialog' // Now used for Gemini API Key configuration
+import { SettingsDialog } from '@/components/SettingsDialog'
 
 export default function Dashboard() {
   const router = useRouter()
