@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { FileUploader } from '@/components/FileUploader'
 import { DocumentList } from '@/components/DocumentList'
 import { SearchBar } from '@/components/SearchBar'
+import { DocumentViewer } from '@/components/DocumentViewer'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -22,7 +23,8 @@ import {
   BarChart3,
   Bell,
   User,
-  Key
+  Key,
+  X
 } from 'lucide-react'
 import { SettingsDialog } from '@/components/SettingsDialog'
 
@@ -400,7 +402,10 @@ export default function Dashboard() {
 
                 {/* Search Bar */}
                 <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
-                  <SearchBar />
+                  <SearchBar 
+                    documents={safeDocuments}
+                    onResultSelect={(doc) => setSelectedDocument(doc)}
+                  />
                 </Card>
 
                 {/* Document List */}
@@ -455,6 +460,27 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Document Viewer Modal */}
+      {selectedDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Document Details</h3>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setSelectedDocument(null)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="p-6">
+              <DocumentViewer document={selectedDocument} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

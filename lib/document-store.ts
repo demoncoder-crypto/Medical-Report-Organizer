@@ -89,9 +89,35 @@ export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalF
 
 export async function searchDocumentsByContent(query: string): Promise<StoredDocument[]> {
   const documents = await getDocuments()
+  
+  // Also load documents from localStorage (client-side uploaded docs)
+  let clientDocs: StoredDocument[] = []
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('medivault-documents')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        clientDocs = parsed.map((doc: any) => ({
+          ...doc,
+          date: new Date(doc.date)
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading client documents for search:', error)
+    }
+  }
+  
+  // Combine all documents
+  const allDocuments = [...documents, ...clientDocs]
+  
+  // If no query, return all documents
+  if (!query.trim()) {
+    return allDocuments
+  }
+  
   const queryLower = query.toLowerCase()
   
-  return documents.filter(doc => {
+  return allDocuments.filter(doc => {
     const searchableText = [
       doc.name,
       doc.summary,
