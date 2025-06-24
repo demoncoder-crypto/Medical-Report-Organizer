@@ -6,7 +6,11 @@ import { Upload, FileText, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { getApiKey } from '@/lib/api-key'
 
-export function FileUploader() {
+interface FileUploaderProps {
+  onUploadSuccess?: () => void
+}
+
+export function FileUploader({ onUploadSuccess }: FileUploaderProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const { toast } = useToast()
 
@@ -42,8 +46,12 @@ export function FileUploader() {
         })
       }
       
-      // Refresh the page to show new documents
-      window.location.reload()
+      // Call the callback to refresh documents or reload page
+      if (onUploadSuccess) {
+        onUploadSuccess()
+      } else {
+        window.location.reload()
+      }
     } catch (error) {
       console.error('Upload error:', error)
       toast({
