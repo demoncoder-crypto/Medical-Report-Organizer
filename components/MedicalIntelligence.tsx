@@ -937,7 +937,7 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
                 )
               }
               
-              const patient = priorityPatients[0]
+              const patient = priorityPatients[0] as any
               const latestEvent = patient.timeline[0]
               
               return (
@@ -1299,7 +1299,7 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
                 )
               }
               
-              const patient = priorityPatients[0]
+              const patient = priorityPatients[0] as any
               const latestEvent = patient.timeline[0]
               
               return (
@@ -1401,7 +1401,7 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
                                     <span key={actionIndex} className={`text-xs px-2 py-1 rounded ${
                                       latestEvent.severity === 'critical' ? 'bg-red-600 text-white' :
                                       latestEvent.severity === 'high' ? 'bg-orange-600 text-white' :
-                                      event.severity === 'moderate' ? 'bg-yellow-600 text-white' :
+                                      latestEvent.severity === 'moderate' ? 'bg-yellow-600 text-white' :
                                       'bg-blue-600 text-white'
                                     }`}>
                                       {action}

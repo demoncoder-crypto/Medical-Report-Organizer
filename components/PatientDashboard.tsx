@@ -453,14 +453,16 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
                 break
             }
 
-            extractedPatient.labResults.push({
-              date: new Date().toISOString().split('T')[0],
-              testName: test.getName(),
-              value: `${value}${test.unit}`,
-              normalRange: test.normalRange,
-              status,
-              orderedBy: 'Uploaded Document'
-            })
+            if (extractedPatient) {
+              extractedPatient.labResults.push({
+                date: new Date().toISOString().split('T')[0],
+                testName: test.getName(),
+                value: `${value}${test.unit}`,
+                normalRange: test.normalRange,
+                status,
+                orderedBy: 'Uploaded Document'
+              })
+            }
 
             foundPatientData = true
             console.log(`[Patient Dashboard] Found lab result: ${test.getName()} = ${value}${test.unit} (${status})`)
@@ -487,20 +489,20 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
     // Auto-detect medical conditions based on lab results
     if (extractedPatient) {
-      extractedPatient.labResults.forEach((lab: any) => {
+      (extractedPatient as any).labResults.forEach((lab: any) => {
         if (lab.testName === 'GFR' && parseFloat(lab.value) < 60) {
-          if (!extractedPatient!.conditions.includes('Chronic Kidney Disease')) {
-            extractedPatient!.conditions.push('Chronic Kidney Disease')
+          if (!(extractedPatient as any).conditions.includes('Chronic Kidney Disease')) {
+            (extractedPatient as any).conditions.push('Chronic Kidney Disease')
           }
         }
         if (lab.testName === 'HbA1c' && parseFloat(lab.value) > 6.5) {
-          if (!extractedPatient!.conditions.includes('Diabetes')) {
-            extractedPatient!.conditions.push('Diabetes')
+          if (!(extractedPatient as any).conditions.includes('Diabetes')) {
+            (extractedPatient as any).conditions.push('Diabetes')
           }
         }
         if (lab.testName === 'Hemoglobin' && parseFloat(lab.value) < 12) {
-          if (!extractedPatient!.conditions.includes('Anemia')) {
-            extractedPatient!.conditions.push('Anemia')
+          if (!(extractedPatient as any).conditions.includes('Anemia')) {
+            (extractedPatient as any).conditions.push('Anemia')
           }
         }
       })
