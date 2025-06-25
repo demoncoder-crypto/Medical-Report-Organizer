@@ -489,20 +489,21 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
     // Auto-detect medical conditions based on lab results
     if (extractedPatient) {
-      (extractedPatient as any).labResults.forEach((lab: any) => {
+      const patient = extractedPatient as PatientData
+      patient.labResults.forEach((lab) => {
         if (lab.testName === 'GFR' && parseFloat(lab.value) < 60) {
-          if (!(extractedPatient as any).conditions.includes('Chronic Kidney Disease')) {
-            (extractedPatient as any).conditions.push('Chronic Kidney Disease')
+          if (!patient.conditions.includes('Chronic Kidney Disease')) {
+            patient.conditions.push('Chronic Kidney Disease')
           }
         }
         if (lab.testName === 'HbA1c' && parseFloat(lab.value) > 6.5) {
-          if (!(extractedPatient as any).conditions.includes('Diabetes')) {
-            (extractedPatient as any).conditions.push('Diabetes')
+          if (!patient.conditions.includes('Diabetes')) {
+            patient.conditions.push('Diabetes')
           }
         }
         if (lab.testName === 'Hemoglobin' && parseFloat(lab.value) < 12) {
-          if (!(extractedPatient as any).conditions.includes('Anemia')) {
-            (extractedPatient as any).conditions.push('Anemia')
+          if (!patient.conditions.includes('Anemia')) {
+            patient.conditions.push('Anemia')
           }
         }
       })
@@ -510,22 +511,23 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
     // Add to patients list
     if (extractedPatient) {
+      const patient = extractedPatient as PatientData
       const allPatients = { ...mockPatients }
-      allPatients['real-patient'] = extractedPatient
+      allPatients['real-patient'] = patient
       setPatients(allPatients)
       setSelectedPatient('real-patient')
 
       // Save to localStorage for persistence
-      localStorage.setItem('patientDashboard_realPatient', JSON.stringify(extractedPatient))
+      localStorage.setItem('patientDashboard_realPatient', JSON.stringify(patient))
 
       // Show success notification
-      const labCount = extractedPatient.labResults.length
-      const conditionCount = extractedPatient.conditions.length
-      const docCount = extractedPatient.documents.length
+      const labCount = patient.labResults.length
+      const conditionCount = patient.conditions.length
+      const docCount = patient.documents.length
 
-      alert(`✅ Successfully loaded your real patient data!\n\n👤 Patient: ${extractedPatient.name}\n🎂 Age: ${extractedPatient.age} years\n⚕️ Gender: ${extractedPatient.gender}\n\n📊 Data Extracted:\n• ${labCount} lab results\n• ${conditionCount} medical conditions\n• ${docCount} documents processed\n\n💾 Data saved - will persist across navigation!`)
+      alert(`✅ Successfully loaded your real patient data!\n\n👤 Patient: ${patient.name}\n🎂 Age: ${patient.age} years\n⚕️ Gender: ${patient.gender}\n\n📊 Data Extracted:\n• ${labCount} lab results\n• ${conditionCount} medical conditions\n• ${docCount} documents processed\n\n💾 Data saved - will persist across navigation!`)
 
-      console.log('[Patient Dashboard] Real patient data loaded successfully:', extractedPatient)
+      console.log('[Patient Dashboard] Real patient data loaded successfully:', patient)
     }
   }
 
@@ -601,8 +603,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
               console.log('Current patients state:', patients)
               console.log('Selected patient:', selectedPatient)
               console.log('Current patient data:', getCurrentPatient())
-              const testExtraction = extractPatientFromDocuments()
-              console.log('Test extraction result:', testExtraction)
+              console.log('Available documents count:', documents?.length || 0)
             }}
           >
             🔍 Debug
