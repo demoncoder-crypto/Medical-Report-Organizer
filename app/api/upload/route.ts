@@ -3,8 +3,19 @@ import type { NextRequest } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { saveDocument } from '@/lib/document-store'
 
+export async function GET() {
+  return NextResponse.json({ 
+    status: 'Upload API is working', 
+    timestamp: new Date().toISOString(),
+    message: 'Use POST to upload files' 
+  })
+}
+
 export async function POST(req: NextRequest) {
   console.log('---[/api/upload] - POST request received---')
+  console.log('[API] Request URL:', req.url)
+  console.log('[API] Request headers:', Object.fromEntries(req.headers.entries()))
+  
   try {
     const userApiKey = req.headers.get('X-Gemini-Api-Key')
     const apiKey = userApiKey || process.env.GEMINI_API_KEY

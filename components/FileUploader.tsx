@@ -23,6 +23,13 @@ export function FileUploader({ onUploadSuccess }: FileUploaderProps) {
     
     try {
       for (const file of acceptedFiles) {
+        console.log(`[FileUploader] Processing file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
+        
+        // Check file size (limit to 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error(`File ${file.name} is too large. Maximum size is 10MB.`)
+        }
+        
         const isImageFile = file.type.startsWith('image/')
         
         // Stage 1: OCR Processing (for images)
@@ -66,48 +73,120 @@ export function FileUploader({ onUploadSuccess }: FileUploaderProps) {
         // Stage 2: Document Upload & AI Processing
         setProcessingStage('🧠 AI analyzing document content...')
         
-        const formData = new FormData()
-        formData.append('file', file)
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
 
-        const apiKey = getApiKey()
-        const headers = new Headers()
-        if (apiKey) {
-          headers.append('X-Gemini-Api-Key', apiKey)
-        }
+          const apiKey = getApiKey()
+          const headers = new Headers()
+          if (apiKey) {
+            headers.append('X-Gemini-Api-Key', apiKey)
+          }
 
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers,
-          body: formData,
-        })
+          console.log('[FileUploader] Making API request to /api/upload')
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers,
+            body: formData,
+          })
 
-        const result = await response.json()
+          console.log('[FileUploader] Response status:', response.status)
+          console.log('[FileUploader] Response headers:', Object.fromEntries(response.headers.entries()))
 
-        if (!response.ok) {
-          throw new Error(result.error || 'Upload failed')
-        }
-
-        // Save uploaded document to localStorage for Vercel persistence
-        if (result.document) {
-          try {
+          // Check if response is actually JSON
+          const contentType = response.headers.get('content-type')
+          if (!contentType || !contentType.includes('application/json')) {
+            console.error('[FileUploader] Response is not JSON, content-type:', contentType)
+            const responseText = await response.text()
+            console.error('[FileUploader] Response text:', responseText.substring(0, 500))
+            
+            // Fallback: Save document locally without API processing
+            console.log('[FileUploader] API failed, using fallback local storage')
+            const fallbackDoc = {
+              id: `local-${Date.now()}`,
+              name: file.name,
+              type: file.name.toLowerCase().includes('lab') ? 'lab_report' : 
+                    file.name.toLowerCase().includes('prescription') ? 'prescription' : 'other',
+              date: new Date().toISOString(),
+              summary: `Document uploaded locally: ${file.name} (API processing unavailable)`,
+              content: `File: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)`,
+              tags: ['uploaded', 'local'],
+              size: `${Math.round(file.size / 1024)}KB`
+            }
+            
+            // Save to localStorage
             const stored = localStorage.getItem('medivault-documents')
             const existingDocs = stored ? JSON.parse(stored) : []
+            existingDocs.push(fallbackDoc)
+            localStorage.setItem('medivault-documents', JSON.stringify(existingDocs))
             
-            // Add new document (avoid duplicates by ID)
-            if (!existingDocs.find((doc: any) => doc.id === result.document.id)) {
-              existingDocs.push(result.document)
-              localStorage.setItem('medivault-documents', JSON.stringify(existingDocs))
-              console.log('[FileUploader] Document saved to localStorage:', result.document.name)
-            }
-          } catch (error) {
-            console.error('Error saving to localStorage:', error)
+            toast({
+              title: "Document uploaded (offline mode)",
+              description: `${file.name} saved locally. API processing is currently unavailable.`,
+              variant: "destructive",
+            })
+            
+            continue // Skip to next file
           }
+
+          const result = await response.json()
+          console.log('[FileUploader] Parsed JSON result:', result)
+
+          if (!response.ok) {
+            throw new Error(result.error || `HTTP ${response.status}: Upload failed`)
+          }
+
+          // Save uploaded document to localStorage for Vercel persistence
+          if (result.document) {
+            try {
+              const stored = localStorage.getItem('medivault-documents')
+              const existingDocs = stored ? JSON.parse(stored) : []
+              
+              // Add new document (avoid duplicates by ID)
+              if (!existingDocs.find((doc: any) => doc.id === result.document.id)) {
+                existingDocs.push(result.document)
+                localStorage.setItem('medivault-documents', JSON.stringify(existingDocs))
+                console.log('[FileUploader] Document saved to localStorage:', result.document.name)
+              }
+            } catch (error) {
+              console.error('Error saving to localStorage:', error)
+            }
+          }
+          
+          toast({
+            title: "Document uploaded",
+            description: `${file.name} has been processed successfully.`,
+          })
+          
+        } catch (apiError) {
+          console.error('[FileUploader] API error:', apiError)
+          
+          // Fallback: Save document locally
+          console.log('[FileUploader] Using fallback due to API error')
+          const fallbackDoc = {
+            id: `local-${Date.now()}`,
+            name: file.name,
+            type: file.name.toLowerCase().includes('lab') ? 'lab_report' : 
+                  file.name.toLowerCase().includes('prescription') ? 'prescription' : 'other',
+            date: new Date().toISOString(),
+            summary: `Document uploaded locally: ${file.name} (API error: ${apiError instanceof Error ? apiError.message : 'Unknown error'})`,
+            content: `File: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)`,
+            tags: ['uploaded', 'local', 'api-error'],
+            size: `${Math.round(file.size / 1024)}KB`
+          }
+          
+          // Save to localStorage
+          const stored = localStorage.getItem('medivault-documents')
+          const existingDocs = stored ? JSON.parse(stored) : []
+          existingDocs.push(fallbackDoc)
+          localStorage.setItem('medivault-documents', JSON.stringify(existingDocs))
+          
+          toast({
+            title: "Document uploaded (fallback mode)",
+            description: `${file.name} saved locally. API processing failed: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`,
+            variant: "destructive",
+          })
         }
-        
-        toast({
-          title: "Document uploaded",
-          description: `${file.name} has been processed successfully.`,
-        })
       }
       
       // Call the callback to refresh documents or reload page

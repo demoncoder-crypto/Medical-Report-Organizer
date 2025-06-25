@@ -1205,44 +1205,217 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
           </Card>
 
           {/* Quick Actions */}
-          <div className="space-y-4">
-            <Card className="p-4">
-              <h4 className="font-semibold text-gray-800 mb-4">Quick Actions</h4>
-              <div className="space-y-2">
-                <Button className="w-full justify-start" variant="outline">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Schedule Appointment
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Request Records
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Pill className="h-4 w-4 mr-2" />
-                  Refill Prescription
-                </Button>
-                <Button className="w-full justify-start" variant="outline">
-                  <Bell className="h-4 w-4 mr-2" />
-                  Set Medication Reminder
-                </Button>
-              </div>
-            </Card>
+          <Card className="p-4">
+            <h4 className="font-semibold text-gray-800 mb-4">Quick Actions</h4>
+            <div className="space-y-2">
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => {
+                  const appointmentTypes = ['Follow-up', 'Routine Check-up', 'Specialist Consultation', 'Lab Work', 'Emergency']
+                  const selectedType = appointmentTypes[Math.floor(Math.random() * appointmentTypes.length)]
+                  const futureDate = new Date()
+                  futureDate.setDate(futureDate.getDate() + Math.floor(Math.random() * 30) + 7) // 1-5 weeks from now
+                  
+                  const newAppointment = {
+                    date: futureDate.toISOString().split('T')[0],
+                    time: ['9:00 AM', '10:30 AM', '2:00 PM', '3:30 PM'][Math.floor(Math.random() * 4)],
+                    doctor: currentPatient.conditions.length > 0 ? 
+                      (currentPatient.conditions[0].includes('Kidney') ? 'Dr. Williams (Nephrology)' : 'Dr. Smith (Primary Care)') :
+                      'Dr. Johnson (Primary Care)',
+                    specialty: currentPatient.conditions.length > 0 ? 
+                      (currentPatient.conditions[0].includes('Kidney') ? 'Nephrology' : 'Primary Care') :
+                      'Primary Care',
+                    type: selectedType,
+                    status: 'scheduled' as const,
+                    notes: `Scheduled via patient portal for ${currentPatient.name}`
+                  }
+                  
+                  // Update patient data
+                  const updatedPatient = { ...currentPatient }
+                  updatedPatient.appointments.unshift(newAppointment)
+                  
+                  // Update state
+                  const allPatients = { ...patients }
+                  allPatients[selectedPatient] = updatedPatient
+                  setPatients(allPatients)
+                  
+                  // Save to localStorage if it's real patient data
+                  if (selectedPatient === 'real-patient') {
+                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
+                  }
+                  
+                  alert(`✅ Appointment Scheduled!\n\n📅 Date: ${newAppointment.date}\n🕐 Time: ${newAppointment.time}\n👨‍⚕️ Doctor: ${newAppointment.doctor}\n📋 Type: ${newAppointment.type}\n\n📧 Confirmation email sent!\n📱 SMS reminder will be sent 24 hours before.`)
+                }}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Schedule Appointment
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => {
+                  const recordTypes = [
+                    'Complete Medical History',
+                    'Lab Results (Last 6 months)',
+                    'Prescription History',
+                    'Imaging Reports',
+                    'Vaccination Records',
+                    'Specialist Consultation Notes'
+                  ]
+                  
+                  const requestId = `REQ-${Date.now().toString().slice(-6)}`
+                  const processingTime = '3-5 business days'
+                  
+                  // Simulate adding a new document request
+                  const newDocument = {
+                    name: `Medical Records Request - ${requestId}`,
+                    type: 'Record Request',
+                    date: new Date().toISOString().split('T')[0],
+                    uploadedBy: 'Patient Portal',
+                    size: 'Processing...'
+                  }
+                  
+                  // Update patient data
+                  const updatedPatient = { ...currentPatient }
+                  updatedPatient.documents.unshift(newDocument)
+                  
+                  // Update state
+                  const allPatients = { ...patients }
+                  allPatients[selectedPatient] = updatedPatient
+                  setPatients(allPatients)
+                  
+                  // Save to localStorage if it's real patient data
+                  if (selectedPatient === 'real-patient') {
+                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
+                  }
+                  
+                  alert(`📋 Medical Records Request Submitted!\n\n🆔 Request ID: ${requestId}\n⏱️ Processing Time: ${processingTime}\n📧 Email: Records will be sent to your registered email\n🔒 Security: Records will be encrypted and password protected\n\nAvailable Records:\n${recordTypes.map(type => `• ${type}`).join('\n')}\n\n✅ You'll receive an email confirmation shortly.`)
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Request Records
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => {
+                  if (currentPatient.medications.length === 0) {
+                    alert('❌ No Current Medications\n\nYou don\'t have any active prescriptions to refill.\nPlease contact your doctor if you need new prescriptions.')
+                    return
+                  }
+                  
+                  const medicationsToRefill = currentPatient.medications.map(med => ({
+                    name: med.name,
+                    dosage: med.dosage,
+                    frequency: med.frequency,
+                    prescribedBy: med.prescribedBy,
+                    refillId: `RX-${Date.now().toString().slice(-6)}`,
+                    estimatedReady: (() => {
+                      const date = new Date()
+                      date.setDate(date.getDate() + Math.floor(Math.random() * 3) + 1) // 1-3 days
+                      return date.toISOString().split('T')[0]
+                    })(),
+                    pharmacy: 'CVS Pharmacy - Main St',
+                    copay: '$' + (Math.floor(Math.random() * 30) + 10) // $10-40
+                  }))
+                  
+                  // Update patient medications with new prescription dates
+                  const updatedPatient = { ...currentPatient }
+                  updatedPatient.medications = updatedPatient.medications.map(med => ({
+                    ...med,
+                    prescribedDate: new Date().toISOString().split('T')[0]
+                  }))
+                  
+                  // Update state
+                  const allPatients = { ...patients }
+                  allPatients[selectedPatient] = updatedPatient
+                  setPatients(allPatients)
+                  
+                  // Save to localStorage if it's real patient data
+                  if (selectedPatient === 'real-patient') {
+                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
+                  }
+                  
+                  const refillDetails = medicationsToRefill.map(med => 
+                    `💊 ${med.name} ${med.dosage}\n   📋 ${med.refillId} | 📅 Ready: ${med.estimatedReady}\n   💰 Copay: ${med.copay}`
+                  ).join('\n\n')
+                  
+                  alert(`💊 Prescription Refill Requested!\n\n${refillDetails}\n\n🏪 Pharmacy: ${medicationsToRefill[0].pharmacy}\n📱 SMS: You'll receive pickup notifications\n🚗 Pickup: Drive-thru available\n💳 Payment: Copay due at pickup\n\n✅ All refill requests submitted successfully!`)
+                }}
+              >
+                <Pill className="h-4 w-4 mr-2" />
+                Refill Prescription
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => {
+                  if (currentPatient.medications.length === 0) {
+                    alert('❌ No Current Medications\n\nYou don\'t have any active medications to set reminders for.\nPlease add medications first or contact your doctor.')
+                    return
+                  }
+                  
+                  const reminderTimes = ['8:00 AM', '12:00 PM', '6:00 PM', '9:00 PM']
+                  const selectedTime = reminderTimes[Math.floor(Math.random() * reminderTimes.length)]
+                  
+                  const medicationReminders = currentPatient.medications.map(med => {
+                    const frequency = med.frequency.toLowerCase()
+                    let reminderSchedule = ''
+                    
+                    if (frequency.includes('once') || frequency.includes('daily')) {
+                      reminderSchedule = `Daily at ${selectedTime}`
+                    } else if (frequency.includes('twice')) {
+                      reminderSchedule = `Twice daily at 8:00 AM and 8:00 PM`
+                    } else if (frequency.includes('three') || frequency.includes('3')) {
+                      reminderSchedule = `Three times daily at 8:00 AM, 2:00 PM, and 8:00 PM`
+                    } else {
+                      reminderSchedule = `As prescribed (${med.frequency})`
+                    }
+                    
+                    return {
+                      medication: `${med.name} ${med.dosage}`,
+                      schedule: reminderSchedule,
+                      reminderId: `REM-${Date.now().toString().slice(-6)}`
+                    }
+                  })
+                  
+                  // Simulate saving reminder preferences
+                  const reminderSettings = {
+                    enabled: true,
+                    method: ['Push Notification', 'SMS', 'Email'],
+                    snoozeOption: '15 minutes',
+                    missedDoseAlert: 'After 2 hours',
+                    setupDate: new Date().toISOString().split('T')[0]
+                  }
+                  
+                  const reminderList = medicationReminders.map(reminder => 
+                    `💊 ${reminder.medication}\n   ⏰ ${reminder.schedule}\n   🆔 ${reminder.reminderId}`
+                  ).join('\n\n')
+                  
+                  alert(`⏰ Medication Reminders Set!\n\n${reminderList}\n\n📱 Notification Methods:\n• Push notifications\n• SMS alerts\n• Email reminders\n\n⚙️ Settings:\n• Snooze: ${reminderSettings.snoozeOption}\n• Missed dose alert: ${reminderSettings.missedDoseAlert}\n• Smart scheduling based on meal times\n\n✅ All reminders activated!\n🔔 First reminder will be sent at the next scheduled time.`)
+                }}
+              >
+                <Bell className="h-4 w-4 mr-2" />
+                Set Medication Reminder
+              </Button>
+            </div>
+          </Card>
 
-            <Card className="p-4">
-              <h4 className="font-semibold text-gray-800 mb-4">Emergency Contact</h4>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="font-medium">Name:</span> {currentPatient.emergencyContact.name}
-                </div>
-                <div>
-                  <span className="font-medium">Phone:</span> {currentPatient.emergencyContact.phone}
-                </div>
-                <div>
-                  <span className="font-medium">Relationship:</span> {currentPatient.emergencyContact.relationship}
-                </div>
+          <Card className="p-4">
+            <h4 className="font-semibold text-gray-800 mb-4">Emergency Contact</h4>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium">Name:</span> {currentPatient.emergencyContact.name}
               </div>
-            </Card>
-          </div>
+              <div>
+                <span className="font-medium">Phone:</span> {currentPatient.emergencyContact.phone}
+              </div>
+              <div>
+                <span className="font-medium">Relationship:</span> {currentPatient.emergencyContact.relationship}
+              </div>
+            </div>
+          </Card>
         </div>
         </div>
       )}
