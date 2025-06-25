@@ -381,6 +381,7 @@ export default function Dashboard() {
                   <Scan className="mr-3 h-4 w-4" />
                   OCR Testing
                 </Button>
+                <Button onClick={() => console.log('DOCUMENTS STATE:', documents)}>Log Docs</Button>
               </div>
 
               {/* Documents Section */}
@@ -532,16 +533,16 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Clinical Dashboard Section */}
+            {/* Clinical Dashboard */}
             {activeSection === 'clinical' && (
-              <div className="space-y-8">
-                <DoctorDashboard />
+              <div>
+                <DoctorDashboard documents={safeDocuments} />
               </div>
             )}
 
-            {/* Patient Dashboard Section */}
+            {/* Patient Dashboard */}
             {activeSection === 'patient' && (
-              <div className="space-y-8">
+              <div>
                 <PatientDashboard documents={safeDocuments} />
               </div>
             )}

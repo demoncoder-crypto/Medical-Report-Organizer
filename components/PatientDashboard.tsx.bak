@@ -283,39 +283,21 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
     console.log(`[Patient Dashboard] Processing ${documents.length} documents...`)
 
-    // Try to extract from each document, prioritizing real medical documents
-    const sortedDocs = documents.slice().sort((a, b) => {
-      // Prioritize documents with longer, more detailed content (likely real medical reports)
-      const aContent = a.summary || a.content || ''
-      const bContent = b.summary || b.content || ''
-      
-      // Prioritize documents that contain "WS DHILLON" or medical terms
-      const aHasPatient = aContent.includes('WS DHILLON') || aContent.includes('lab report')
-      const bHasPatient = bContent.includes('WS DHILLON') || bContent.includes('lab report')
-      
-      if (aHasPatient && !bHasPatient) return -1
-      if (!aHasPatient && bHasPatient) return 1
-      
-      // Then prioritize by content length (more detailed documents first)
-      return bContent.length - aContent.length
-    })
-    
-    sortedDocs.forEach((doc: any, index: number) => {
+    // Try to extract from each document
+    documents.forEach((doc: any, index: number) => {
       console.log(`[Patient Dashboard] Processing document ${index + 1}: ${doc.name}`)
       console.log(`[Patient Dashboard] Document structure:`, Object.keys(doc))
       
       // Try multiple content fields in order of preference
       const content = doc.summary || doc.content || doc.extractedText || doc.text || doc.name || ''
       console.log(`[Patient Dashboard] Content length: ${content.length}`)
-      console.log(`[Patient Dashboard] Full content being processed:`, content)
       
       if (!content || content.length < 10) {
         console.log(`[Patient Dashboard] Skipping document - insufficient content`)
         return
       }
 
-      console.log(`[Patient Dashboard] Document content preview: ${content.substring(0, 1000)}...`)
-      console.log(`[Patient Dashboard] Full content being processed:`, content)
+      console.log(`[Patient Dashboard] Document content preview: ${content.substring(0, 500)}...`)
 
       // Initialize patient if not already done
       if (!extractedPatient) {
@@ -343,16 +325,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       // Enhanced patient name extraction with more flexible patterns
       const namePatterns = [
-        // Direct name extraction: "WS DHILLON, a 65-year-old"
-        /([A-Z]{1,3}\s+[A-Z]{2,}),?\s*a?\s*\d+-year-old/i,
-        // Medical report format: "This is a lab report for WS DHILLON"
-        /(?:lab report for|report for|for)\s+([A-Z]{1,3}\s+[A-Z]{2,})/i,
         // Standard formats: "Patient: John Doe", "Name: Jane Smith"
         /(?:Patient|Name|Patient Name)[:\s]*([A-Z][a-zA-Z\s]{2,30})(?:\s|,|$|\n)/i,
-        // Name in medical format: "SMITH, JOHN" or "Doe, Jane" or "WS DHILLON"
-        /\b([A-Z]{1,3}\s+[A-Z]{2,})\b/i,
         // Name followed by age/DOB: "John Doe Age 45", "Jane Smith DOB"
         /^([A-Z][a-zA-Z\s]{2,30})\s*(?:Age|age|DOB|\d)/i,
+        // Name in medical format: "SMITH, JOHN" or "Doe, Jane"
+        /([A-Z]{2,}[,\s]+[A-Z][a-zA-Z\s]{1,20})(?:\s|,|$|\n)/i,
         // Simple name patterns: "John Doe 45 years", "Jane Smith Male"
         /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+\d+|\s+(?:Male|Female|years|Age))/i,
         // Name at start of document
@@ -363,21 +341,11 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       console.log(`[Patient Dashboard] Trying ${namePatterns.length} name patterns...`)
       for (const pattern of namePatterns) {
-        console.log(`[Patient Dashboard] Testing pattern: ${pattern.source}`)
         const nameMatch = content.match(pattern)
-        console.log(`[Patient Dashboard] Pattern result:`, nameMatch)
         if (nameMatch && extractedPatient.name === 'Unknown Patient') {
           let name = nameMatch[1].trim()
-          console.log(`[Patient Dashboard] Raw extracted name: "${name}"`)
           // Clean up the name (remove extra spaces, fix case)
           name = name.replace(/\s+/g, ' ').replace(/,\s*/, ', ')
-          
-          // Special handling for medical terms that shouldn't be names
-          const invalidNames = ['all parameters', 'blood pressure', 'chest pain', 'emergency room', 'acute chest']
-          if (invalidNames.some(invalid => name.toLowerCase().includes(invalid.toLowerCase()))) {
-            console.log(`[Patient Dashboard] Skipping invalid name: "${name}"`)
-            continue
-          }
           
           // Validate name (reasonable length, contains letters)
           if (name.length > 3 && name.length < 50 && /[A-Za-z]/.test(name)) {
@@ -385,16 +353,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
             foundPatientData = true
             console.log(`[Patient Dashboard] Found patient name: ${extractedPatient.name}`)
             break
-          } else {
-            console.log(`[Patient Dashboard] Name validation failed: length=${name.length}, hasLetters=${/[A-Za-z]/.test(name)}`)
           }
         }
       }
 
       // Enhanced age extraction with more patterns
       const agePatterns = [
-        // Medical report format: "WS DHILLON, a 65-year-old male"
-        /(\d{1,3})-year-old/i,
         /(?:Age|age)[:\s]*(\d{1,3})\s*(?:years?|yo|y\.o\.|\s|$)/i,
         /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i,
         /DOB[:\s]*\d{1,2}[\/\-]\d{1,2}[\/\-](\d{4})/i,
@@ -404,9 +368,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       console.log(`[Patient Dashboard] Trying ${agePatterns.length} age patterns...`)
       for (const pattern of agePatterns) {
-        console.log(`[Patient Dashboard] Testing age pattern: ${pattern.source}`)
         const ageMatch = content.match(pattern)
-        console.log(`[Patient Dashboard] Age pattern result:`, ageMatch)
         if (ageMatch && extractedPatient.age === 0) {
           if (pattern.source.includes('DOB')) {
             // Calculate age from birth year
@@ -416,22 +378,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
             extractedPatient.age = parseInt(ageMatch[1])
           }
           
-          console.log(`[Patient Dashboard] Raw extracted age: ${extractedPatient.age}`)
-          
-          // Skip obviously invalid ages (like dosages)
-          if (extractedPatient.age < 18 || extractedPatient.age > 120) {
-            console.log(`[Patient Dashboard] Skipping unrealistic age: ${extractedPatient.age}`)
-            extractedPatient.age = 0
-            continue
-          }
-          
           // Validate age (reasonable range)
           if (extractedPatient.age > 0 && extractedPatient.age < 150) {
             foundPatientData = true
             console.log(`[Patient Dashboard] Found patient age: ${extractedPatient.age}`)
             break
           } else {
-            console.log(`[Patient Dashboard] Age validation failed: ${extractedPatient.age}`)
             extractedPatient.age = 0 // Reset invalid age
           }
         }
@@ -569,15 +521,13 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
       })
 
       // Add document to patient record
-      if (extractedPatient) {
-        extractedPatient.documents.push({
-          name: doc.name || 'Medical Report',
-          type: doc.type || 'Lab Report',
-          date: new Date().toISOString().split('T')[0],
-          uploadedBy: 'Patient Upload',
-          size: doc.size || 'Unknown'
-        })
-      }
+      extractedPatient.documents.push({
+        name: doc.name || 'Medical Report',
+        type: doc.type || 'Lab Report',
+        date: new Date().toISOString().split('T')[0],
+        uploadedBy: 'Patient Upload',
+        size: doc.size || 'Unknown'
+      })
       foundPatientData = true
     })
 
@@ -588,7 +538,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
       if (extractedPatient && (extractedPatient as PatientData).name === 'Unknown Patient') {
         const patient = extractedPatient as PatientData
         // Look for any capitalized words that could be names
-        const allContent = documents.map(doc => doc.summary || doc.content || '').join(' ')
+        const allContent = documents.map(doc => doc.content || doc.summary || '').join(' ')
         console.log('[Patient Dashboard] Combined content length:', allContent.length)
         
         // Extract any capitalized names (more permissive)
@@ -925,7 +875,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
           >
             {Object.entries(patients).map(([id, patient]) => (
               <option key={id} value={id}>
-                {patient.name} {id === 'real-patient' ? '(Your Data)' : id.includes('johnson') || id.includes('chen') ? '(Demo)' : ''}
+                {patient.name} {id === 'current-patient' ? '(Your Data)' : '(Demo)'}
               </option>
             ))}
           </select>
@@ -939,46 +889,6 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
               console.log('Selected patient:', selectedPatient)
               console.log('Current patient data:', getCurrentPatient())
               console.log('Available documents count:', documents?.length || 0)
-              
-              // NEW: Detailed document content analysis
-              if (documents && documents.length > 0) {
-                documents.forEach((doc, i) => {
-                  console.log(`=== DOCUMENT ${i + 1} ANALYSIS ===`)
-                  console.log('Document object:', doc)
-                  console.log('Document keys:', Object.keys(doc))
-                  
-                  const content = doc.summary || doc.content || doc.extractedText || doc.text || ''
-                  console.log('Content source:', doc.summary ? 'summary' : doc.content ? 'content' : 'other')
-                  console.log('Content length:', content.length)
-                  console.log('Full content:', content)
-                  
-                  // Test specific patterns manually
-                  console.log('=== PATTERN TESTING ===')
-                  
-                  // Test name patterns
-                  const testNamePatterns = [
-                    /([A-Z]{1,3}\s+[A-Z]{2,}),?\s*a?\s*\d+-year-old/i,
-                    /(?:lab report for|report for|for)\s+([A-Z]{1,3}\s+[A-Z]{2,})/i,
-                    /\b([A-Z]{1,3}\s+[A-Z]{2,})\b/i
-                  ]
-                  
-                  testNamePatterns.forEach((pattern, idx) => {
-                    const match = content.match(pattern)
-                    console.log(`Name pattern ${idx + 1} (${pattern.source}):`, match)
-                  })
-                  
-                  // Test age patterns
-                  const testAgePatterns = [
-                    /(\d{1,3})-year-old/i,
-                    /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i
-                  ]
-                  
-                  testAgePatterns.forEach((pattern, idx) => {
-                    const match = content.match(pattern)
-                    console.log(`Age pattern ${idx + 1} (${pattern.source}):`, match)
-                  })
-                })
-              }
             }}
           >
             🔍 Debug
@@ -1029,7 +939,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
               </div>
             </div>
           </div>
-          {selectedPatient === 'real-patient' && (
+          {selectedPatient === 'current-patient' && (
             <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-full">
               Your Data
             </span>

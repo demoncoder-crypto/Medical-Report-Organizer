@@ -57,7 +57,11 @@ interface Doctor {
   alerts: ClinicalAlert[]
 }
 
-export function DoctorDashboard() {
+interface DoctorDashboardProps {
+  documents?: any[]
+}
+
+export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null)
@@ -75,7 +79,17 @@ export function DoctorDashboard() {
 
   useEffect(() => {
     loadDoctorData()
+    // Also check for real patient data from Patient Dashboard on mount
+    checkAndLoadPatientDashboardData()
   }, [])
+
+  // Automatically extract doctors from documents when documents change
+  useEffect(() => {
+    if (documents && documents.length > 0) {
+      console.log('[Doctor Dashboard] Documents updated, checking for doctor data...')
+      extractAndUpdateDoctorsFromDocuments()
+    }
+  }, [documents])
 
   // Save doctors to localStorage whenever doctors state changes
   useEffect(() => {
@@ -114,7 +128,377 @@ export function DoctorDashboard() {
         loadDoctorData() // Fallback to loading fresh data
       }
     }
+    
+    // Also check for real patient data from Patient Dashboard
+    checkAndLoadPatientDashboardData()
   }, [])
+
+  // Function to check for and load real patient data from Patient Dashboard
+  const checkAndLoadPatientDashboardData = () => {
+    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
+    
+    if (savedRealPatient) {
+      try {
+        const realPatient = JSON.parse(savedRealPatient)
+        console.log('[Doctor Dashboard] Found real patient data from Patient Dashboard:', realPatient)
+        
+        // Create or update doctor entry for this patient
+        createDoctorFromPatientData(realPatient)
+      } catch (error) {
+        console.error('[Doctor Dashboard] Error loading real patient data:', error)
+      }
+    }
+  }
+
+  // Function to create doctor entry from patient data
+  const createDoctorFromPatientData = (patientData: any) => {
+    console.log('[Doctor Dashboard] Creating doctor from patient data:', patientData)
+    
+    // Determine doctor name from patient's lab results or create a default one
+    let doctorName = 'Dr. Amarjot' // Default based on your example
+    let specialty = 'Nephrology'
+    
+    // Try to extract doctor info from patient's lab results
+    if (patientData.labResults && patientData.labResults.length > 0) {
+      const orderedBy = patientData.labResults[0].orderedBy
+      if (orderedBy && orderedBy !== 'Uploaded Document') {
+        doctorName = orderedBy.startsWith('Dr.') ? orderedBy : `Dr. ${orderedBy}`
+      }
+      
+      // Infer specialty from lab types
+      const hasKidneyLabs = patientData.labResults.some((lab: any) => 
+        lab.testName.toLowerCase().includes('gfr') || 
+        lab.testName.toLowerCase().includes('creatinine')
+      )
+      if (hasKidneyLabs) {
+        specialty = 'Nephrology'
+      }
+    }
+
+    // Create patient summary for the doctor dashboard
+    const patientSummary: PatientSummary = {
+      id: `real-patient-${Date.now()}`,
+      name: patientData.name || 'Real Patient',
+      age: patientData.age || 0,
+      lastVisit: new Date().toISOString().split('T')[0],
+      riskLevel: determineRiskLevel(patientData),
+      activeConditions: patientData.conditions || [],
+      recentAlerts: [],
+      medicationCompliance: 85
+    }
+
+    console.log('[Doctor Dashboard] Created patient summary:', patientSummary)
+
+    // Generate clinical alerts from patient data
+    const clinicalAlerts = generateClinicalAlertsFromPatient(patientData, patientSummary.id, doctorName)
+    console.log('[Doctor Dashboard] Generated clinical alerts:', clinicalAlerts)
+
+    // Create or update doctor
+    const doctorId = `real-${doctorName.toLowerCase().replace(/\s+/g, '-')}`
+    
+    setDoctors(prevDoctors => {
+      const existingDoctorIndex = prevDoctors.findIndex(d => d.id === doctorId)
+      
+      if (existingDoctorIndex >= 0) {
+        // Update existing doctor
+        const updatedDoctors = [...prevDoctors]
+        const existingDoctor = updatedDoctors[existingDoctorIndex]
+        
+        // Check if patient already exists
+        const existingPatientIndex = existingDoctor.patients.findIndex(p => p.name === patientSummary.name)
+        if (existingPatientIndex >= 0) {
+          // Update existing patient
+          existingDoctor.patients[existingPatientIndex] = patientSummary
+        } else {
+          // Add new patient
+          existingDoctor.patients.push(patientSummary)
+        }
+        
+        // Update alerts (remove old alerts for this patient and add new ones)
+        existingDoctor.alerts = existingDoctor.alerts.filter(alert => alert.patientName !== patientSummary.name)
+        existingDoctor.alerts.push(...clinicalAlerts)
+        
+        console.log('[Doctor Dashboard] Updated existing doctor:', existingDoctor)
+        return updatedDoctors
+      } else {
+        // Create new doctor
+        const newDoctor: Doctor = {
+          id: doctorId,
+          name: doctorName,
+          specialty: specialty,
+          department: specialty,
+          patients: [patientSummary],
+          alerts: clinicalAlerts
+        }
+        
+        console.log('[Doctor Dashboard] Created new doctor:', newDoctor)
+        return [newDoctor, ...prevDoctors]
+      }
+    })
+
+    // Also update the selected doctor to the new/updated doctor
+    setTimeout(() => {
+      setDoctors(currentDoctors => {
+        const updatedDoctor = currentDoctors.find(d => d.id === doctorId)
+        if (updatedDoctor) {
+          setSelectedDoctor(updatedDoctor)
+          console.log('[Doctor Dashboard] Set selected doctor to:', updatedDoctor)
+        }
+        return currentDoctors
+      })
+    }, 100)
+
+    console.log(`[Doctor Dashboard] Created/updated doctor ${doctorName} with patient ${patientSummary.name} and ${clinicalAlerts.length} alerts`)
+  }
+
+  // Function to determine risk level from patient data
+  const determineRiskLevel = (patientData: any): 'low' | 'medium' | 'high' | 'critical' => {
+    if (!patientData.labResults || patientData.labResults.length === 0) {
+      return 'medium'
+    }
+
+    // Check for critical lab values
+    const hasCritical = patientData.labResults.some((lab: any) => lab.status === 'critical')
+    if (hasCritical) return 'critical'
+
+    const hasHigh = patientData.labResults.some((lab: any) => lab.status === 'high')
+    if (hasHigh) return 'high'
+
+    const hasLow = patientData.labResults.some((lab: any) => lab.status === 'low')
+    if (hasLow) return 'medium'
+
+    return 'low'
+  }
+
+  // Function to generate clinical alerts from patient data
+  const generateClinicalAlertsFromPatient = (patientData: any, patientId: string, doctorName: string): ClinicalAlert[] => {
+    const alerts: ClinicalAlert[] = []
+
+    if (patientData.labResults) {
+      patientData.labResults.forEach((lab: any, index: number) => {
+        if (lab.status === 'critical') {
+          alerts.push({
+            id: `critical-lab-${patientId}-${index}`,
+            patientId: patientId,
+            patientName: patientData.name,
+            type: 'critical_value',
+            severity: 'critical',
+            message: `Critical ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
+            timestamp: new Date().toISOString(),
+            actionRequired: true
+          })
+        } else if (lab.status === 'high') {
+          alerts.push({
+            id: `high-lab-${patientId}-${index}`,
+            patientId: patientId,
+            patientName: patientData.name,
+            type: 'abnormal_lab',
+            severity: 'high',
+            message: `Elevated ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
+            timestamp: new Date().toISOString(),
+            actionRequired: true
+          })
+        } else if (lab.status === 'low') {
+          alerts.push({
+            id: `low-lab-${patientId}-${index}`,
+            patientId: patientId,
+            patientName: patientData.name,
+            type: 'abnormal_lab',
+            severity: 'medium',
+            message: `Low ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
+            timestamp: new Date().toISOString(),
+            actionRequired: true
+          })
+        }
+      })
+    }
+
+    // Add condition-specific alerts
+    if (patientData.conditions) {
+      patientData.conditions.forEach((condition: string, index: number) => {
+        if (condition.toLowerCase().includes('kidney') || condition.toLowerCase().includes('ckd')) {
+          alerts.push({
+            id: `condition-kidney-${patientId}-${index}`,
+            patientId: patientId,
+            patientName: patientData.name,
+            type: 'abnormal_lab',
+            severity: 'high',
+            message: `Patient has ${condition} - requires regular monitoring and nephrology follow-up`,
+            timestamp: new Date().toISOString(),
+            actionRequired: true
+          })
+        } else if (condition.toLowerCase().includes('diabetes')) {
+          alerts.push({
+            id: `condition-diabetes-${patientId}-${index}`,
+            patientId: patientId,
+            patientName: patientData.name,
+            type: 'abnormal_lab',
+            severity: 'medium',
+            message: `Patient has ${condition} - monitor glucose control and complications`,
+            timestamp: new Date().toISOString(),
+            actionRequired: true
+          })
+        }
+      })
+    }
+
+    return alerts
+  }
+
+  // Function to extract and update doctors from uploaded documents
+  const extractAndUpdateDoctorsFromDocuments = () => {
+    console.log(`[Doctor Dashboard] Processing ${documents.length} documents for doctor extraction...`)
+    
+    const extractedDoctors = extractDoctorsFromReports(documents)
+    
+    if (extractedDoctors.length > 0) {
+      console.log(`[Doctor Dashboard] Found ${extractedDoctors.length} doctors in documents`)
+      
+      // Merge with existing doctors, avoiding duplicates
+      setDoctors(prevDoctors => {
+        const existingDoctorNames = new Set(prevDoctors.map(d => d.name))
+        const newDoctors = extractedDoctors.filter(d => !existingDoctorNames.has(d.name))
+        
+        if (newDoctors.length > 0) {
+          console.log(`[Doctor Dashboard] Adding ${newDoctors.length} new doctors`)
+          return [...prevDoctors, ...newDoctors]
+        }
+        
+        return prevDoctors
+      })
+    }
+  }
+
+  // Function to manually load real doctor data from documents
+  const loadRealDoctorData = () => {
+    console.log('[Doctor Dashboard] Manually loading real doctor data from documents...')
+    
+    if (!documents || documents.length === 0) {
+      alert('❌ No documents found!\n\nPlease upload medical documents first:\n1. Go to "Upload Documents" section\n2. Upload your medical reports\n3. Then return to Clinical Dashboard\n4. Click "Load Real Doctor Data"')
+      return
+    }
+
+    console.log(`[Doctor Dashboard] Processing ${documents.length} documents...`)
+    
+    // Debug: Show what's in the documents
+    documents.forEach((doc, i) => {
+      console.log(`[Doctor Dashboard] Document ${i + 1}:`, {
+        name: doc.name,
+        type: doc.type,
+        hasContent: !!(doc.content),
+        hasSummary: !!(doc.summary),
+        contentLength: (doc.content || '').length,
+        summaryLength: (doc.summary || '').length,
+        contentPreview: (doc.content || doc.summary || '').substring(0, 200)
+      })
+    })
+
+    const extractedDoctors = extractDoctorsFromReports(documents)
+    
+    // If no doctors found, create a fallback doctor from any patient data
+    if (extractedDoctors.length === 0) {
+      console.log('[Doctor Dashboard] No doctors found, trying fallback extraction...')
+      
+      // Try to extract any patient information and create a generic doctor
+      let foundPatientData = false
+      const fallbackDoctor: Doctor = {
+        id: 'real-doctor-from-documents',
+        name: 'Dr. Unknown (From Documents)',
+        specialty: 'Internal Medicine',
+        department: 'Internal Medicine',
+        patients: [],
+        alerts: []
+      }
+
+      documents.forEach((doc, index) => {
+        const content = doc.content || doc.summary || ''
+        if (content.length < 10) return
+
+        console.log(`[Doctor Dashboard] Fallback: Processing document ${index + 1} content...`)
+        
+        const patientInfo = extractPatientInfo(content)
+        
+        if (patientInfo.name) {
+          console.log(`[Doctor Dashboard] Fallback: Found patient data:`, patientInfo)
+          
+          // Create patient entry
+          const patient: PatientSummary = {
+            id: `fallback-patient-${Date.now()}-${index}`,
+            name: patientInfo.name,
+            age: patientInfo.age || 0,
+            lastVisit: new Date().toISOString().split('T')[0],
+            riskLevel: inferRiskLevel(content),
+            activeConditions: extractConditions(content),
+            recentAlerts: [`Report uploaded: ${doc.name || 'Medical Report'}`],
+            medicationCompliance: 85
+          }
+          
+          fallbackDoctor.patients.push(patient)
+          
+          // Create alerts for abnormal findings
+          const alerts = createAlertsFromReport(doc, patientInfo.name, fallbackDoctor.id)
+          fallbackDoctor.alerts.push(...alerts)
+          
+          foundPatientData = true
+        }
+      })
+
+      if (foundPatientData) {
+        console.log(`[Doctor Dashboard] Fallback: Created doctor with ${fallbackDoctor.patients.length} patients`)
+        
+        // Replace existing doctors with fallback doctor and mock doctors
+        const mockDoctors = doctors.filter(d => d.id.startsWith('dr'))
+        const allDoctors = [fallbackDoctor, ...mockDoctors]
+        setDoctors(allDoctors)
+        setSelectedDoctor(fallbackDoctor)
+        
+        // Save to localStorage
+        localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(allDoctors))
+        
+        alert(`✅ Successfully loaded patient data from documents!\n\n👨‍⚕️ Created doctor from document data\n📊 Found ${fallbackDoctor.patients.length} patients:\n${fallbackDoctor.patients.map(p => `• ${p.name} (Age: ${p.age})`).join('\n')}\n\n📋 Total alerts: ${fallbackDoctor.alerts.length}\n💾 Data saved - will persist across navigation!`)
+        return
+      }
+    }
+
+    if (extractedDoctors.length === 0) {
+      // Show detailed debugging info
+      console.log('[Doctor Dashboard] DEBUGGING INFO:')
+      console.log('- Documents count:', documents.length)
+      documents.forEach((doc, i) => {
+        console.log(`- Document ${i + 1}:`, {
+          name: doc.name,
+          type: doc.type,
+          hasContent: !!(doc.content),
+          hasSummary: !!(doc.summary),
+          contentLength: (doc.content || '').length,
+          summaryLength: (doc.summary || '').length,
+          keys: Object.keys(doc)
+        })
+      })
+      
+      alert('❌ No doctor or patient information found in your documents.\n\nDebugging Info:\n• Found ' + documents.length + ' documents\n• Check browser console for detailed analysis\n• Try uploading documents with clear doctor names or patient information\n• Ensure documents contain readable text content')
+      return
+    }
+
+    console.log(`[Doctor Dashboard] Extracted ${extractedDoctors.length} doctors from ${documents.length} documents`)
+    
+    // Replace existing doctors with extracted ones, but keep mock doctors as fallback
+    const mockDoctors = doctors.filter(d => d.id.startsWith('dr'))
+    const realDoctors = extractedDoctors
+    
+    const allDoctors = [...realDoctors, ...mockDoctors]
+    setDoctors(allDoctors)
+    
+    // Select the first real doctor
+    if (realDoctors.length > 0) {
+      setSelectedDoctor(realDoctors[0])
+    }
+
+    // Save to localStorage
+    localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(allDoctors))
+    
+    alert(`✅ Successfully loaded real doctor data!\n\n👨‍⚕️ Found ${realDoctors.length} doctors:\n${realDoctors.map(d => `• ${d.name} (${d.specialty})`).join('\n')}\n\n📊 Total patients: ${realDoctors.reduce((sum, d) => sum + d.patients.length, 0)}\n📋 Total alerts: ${realDoctors.reduce((sum, d) => sum + d.alerts.length, 0)}\n\n💾 Data saved - will persist across navigation!`)
+  }
 
   // Function to extract doctors from uploaded reports
   const extractDoctorsFromReports = (documents: any[]): Doctor[] => {
@@ -169,35 +553,137 @@ export function DoctorDashboard() {
   // Helper function to extract doctor names from text
   const extractDoctorNames = (text: string): string[] => {
     const doctorPatterns = [
-      /Dr\.?\s+([A-Za-z\s]+?)(?=,|\n|$)/gi,
-      /Doctor\s+([A-Za-z\s]+?)(?=,|\n|$)/gi
+      // Standard patterns: "Dr. John Smith", "Doctor Jane Doe"
+      /Dr\.?\s+([A-Za-z\s]{3,30})(?=,|\n|$|\.)/gi,
+      /Doctor\s+([A-Za-z\s]{3,30})(?=,|\n|$|\.)/gi,
+      // Signed by patterns: "Signed by Dr. Smith", "Attending: Dr. Johnson"
+      /(?:Signed by|Attending|Physician|Provider)[:\s]*Dr\.?\s+([A-Za-z\s]{3,30})/gi,
+      // Medical signature patterns: "Dr. Smith, MD", "John Doe, MD"
+      /([A-Za-z\s]{3,30}),?\s*M\.?D\.?/gi,
+      // Report patterns: "Report by Dr. Smith", "Ordered by Dr. Johnson"
+      /(?:Report by|Ordered by|Reviewed by)[:\s]*Dr\.?\s+([A-Za-z\s]{3,30})/gi,
+      // Direct name patterns in medical context
+      /\b([A-Z][a-z]+\s+[A-Z][a-z]+),?\s*(?:MD|M\.D\.|Doctor|Physician)/gi,
+      // Simple fallback patterns
+      /Dr\.?\s+([A-Z][a-z]+)/gi,  // Just "Dr. Smith"
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s+MD/gi,  // "John Smith MD"
+      // Any name followed by medical titles
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*,?\s*(?:M\.D\.|MD|Doctor)/gi
     ]
     
     const doctors = new Set<string>()
     
-    doctorPatterns.forEach(pattern => {
+    console.log(`[Doctor Extraction] Processing text of length: ${text.length}`)
+    console.log(`[Doctor Extraction] Text preview: ${text.substring(0, 500)}...`)
+    
+    doctorPatterns.forEach((pattern, index) => {
       let match
+      let matchCount = 0
       while ((match = pattern.exec(text)) !== null) {
-        const doctorName = match[1].trim()
-        if (doctorName.length > 2 && doctorName.length < 50) {
-          doctors.add(`Dr. ${doctorName}`)
+        matchCount++
+        let doctorName = match[1].trim()
+        
+        // Clean up the name
+        doctorName = doctorName.replace(/[,\.]+$/, '') // Remove trailing punctuation
+        doctorName = doctorName.replace(/\s+/g, ' ') // Normalize spaces
+        
+        console.log(`[Doctor Extraction] Pattern ${index + 1} match ${matchCount}: "${doctorName}"`)
+        
+        // Validate name (reasonable length, contains letters, not common medical terms)
+        if (doctorName.length > 2 && doctorName.length < 40 && 
+            /^[A-Za-z\s]+$/.test(doctorName) &&
+            !['Blood Test', 'Lab Report', 'Medical Center', 'Test Results', 'Patient Care', 'Health System', 'Medical', 'Report', 'Test', 'Lab'].some(term => doctorName.includes(term))) {
+          
+          // Ensure it starts with Dr. if not already
+          const formattedName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`
+          doctors.add(formattedName)
+          console.log(`[Doctor Extraction] ✅ Added doctor: ${formattedName}`)
+        } else {
+          console.log(`[Doctor Extraction] ❌ Rejected: "${doctorName}" (length: ${doctorName.length}, valid chars: ${/^[A-Za-z\s]+$/.test(doctorName)})`)
         }
       }
       // Reset regex lastIndex
       pattern.lastIndex = 0
     })
     
+    console.log(`[Doctor Extraction] Total unique doctors found: ${doctors.size}`)
+    console.log(`[Doctor Extraction] Doctors list:`, Array.from(doctors))
     return Array.from(doctors)
   }
 
   // Helper function to extract patient information
   const extractPatientInfo = (text: string) => {
-    const nameMatch = text.match(/(?:Patient|Name|Mr\.?|Mrs\.?|Ms\.?)\s*:?\s*([A-Za-z\s]+)/i)
-    const ageMatch = text.match(/(?:Age|age)\s*:?\s*(\d+)/i)
+    console.log(`[Patient Extraction] Processing text of length: ${text.length}`)
+    
+    // Enhanced patient name patterns
+    const namePatterns = [
+      // Standard formats: "Patient: John Doe", "Name: Jane Smith"
+      /(?:Patient|Name|Patient Name)[:\s]*([A-Z][a-zA-Z\s]{2,30})(?:\s|,|$|\n)/i,
+      // Name followed by age/DOB: "John Doe Age 45", "Jane Smith DOB"
+      /^([A-Z][a-zA-Z\s]{2,30})\s*(?:Age|age|DOB|\d)/i,
+      // Name in medical format: "SMITH, JOHN" or "Doe, Jane"
+      /([A-Z]{2,}[,\s]+[A-Z][a-zA-Z\s]{1,20})(?:\s|,|$|\n)/i,
+      // Simple name patterns: "John Doe 45 years", "Jane Smith Male"
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+\d+|\s+(?:Male|Female|years|Age))/i,
+      // Any two capitalized words (fallback)
+      /\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/
+    ]
+    
+    // Enhanced age patterns
+    const agePatterns = [
+      /(?:Age|age)[:\s]*(\d{1,3})\s*(?:years?|yo|y\.o\.|\s|$)/i,
+      /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i,
+      /DOB[:\s]*\d{1,2}[\/\-]\d{1,2}[\/\-](\d{4})/i,
+      /Age[:\s]*(\d{1,3})/i,
+      /(\d{1,3})\s*years/i
+    ]
+    
+    let patientName = null
+    let patientAge = null
+    
+    // Try to extract patient name
+    for (const pattern of namePatterns) {
+      const nameMatch = text.match(pattern)
+      if (nameMatch) {
+        let name = nameMatch[1].trim()
+        // Clean up the name (remove extra spaces, fix case)
+        name = name.replace(/\s+/g, ' ').replace(/,\s*/, ', ')
+        
+        // Validate name (reasonable length, contains letters, not common medical terms)
+        if (name.length > 3 && name.length < 50 && /[A-Za-z]/.test(name) &&
+            !['Blood Test', 'Lab Report', 'Medical Center', 'Test Results', 'Patient Care'].some(term => name.includes(term))) {
+          patientName = name
+          console.log(`[Patient Extraction] Found patient name: ${patientName}`)
+          break
+        }
+      }
+    }
+    
+    // Try to extract patient age
+    for (const pattern of agePatterns) {
+      const ageMatch = text.match(pattern)
+      if (ageMatch) {
+        let age: number
+        if (pattern.source.includes('DOB')) {
+          // Calculate age from birth year
+          const birthYear = parseInt(ageMatch[1])
+          age = new Date().getFullYear() - birthYear
+        } else {
+          age = parseInt(ageMatch[1])
+        }
+        
+        // Validate age (reasonable range)
+        if (age > 0 && age < 150) {
+          patientAge = age
+          console.log(`[Patient Extraction] Found patient age: ${patientAge}`)
+          break
+        }
+      }
+    }
     
     return {
-      name: nameMatch ? nameMatch[1].trim() : null,
-      age: ageMatch ? parseInt(ageMatch[1]) : null
+      name: patientName,
+      age: patientAge
     }
   }
 
@@ -269,31 +755,231 @@ export function DoctorDashboard() {
     const alerts = []
     const text = (doc.content || doc.summary || '').toLowerCase()
     
-    if (text.includes('gfr 7') || text.includes('creatinine 8')) {
+    console.log(`[Alert Generation] Processing document for ${patientName}`)
+    console.log(`[Alert Generation] Document content preview: ${text.substring(0, 300)}...`)
+    
+    // Enhanced alert detection patterns
+    
+    // 1. Kidney function alerts (GFR and Creatinine)
+    const gfrMatch = text.match(/gfr[:\s]*(\d+(?:\.\d+)?)/i)
+    if (gfrMatch) {
+      const gfrValue = parseFloat(gfrMatch[1])
+      console.log(`[Alert Generation] Found GFR: ${gfrValue}`)
+      
+      if (gfrValue < 15) {
+        alerts.push({
+          id: `${doctorId}-gfr-critical-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'critical' as const,
+          message: `Critical kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (gfrValue < 30) {
+        alerts.push({
+          id: `${doctorId}-gfr-severe-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'high' as const,
+          message: `Severe kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (gfrValue < 60) {
+        alerts.push({
+          id: `${doctorId}-gfr-moderate-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'medium' as const,
+          message: `Moderate kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      }
+    }
+    
+    // 2. Creatinine alerts
+    const creatinineMatch = text.match(/creatinine[:\s]*(\d+(?:\.\d+)?)/i)
+    if (creatinineMatch) {
+      const creatinineValue = parseFloat(creatinineMatch[1])
+      console.log(`[Alert Generation] Found Creatinine: ${creatinineValue}`)
+      
+      if (creatinineValue > 5.0) {
+        alerts.push({
+          id: `${doctorId}-creatinine-critical-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'critical' as const,
+          message: `Critical creatinine level - ${creatinineValue} mg/dL (Normal: 0.6-1.2)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (creatinineValue > 2.0) {
+        alerts.push({
+          id: `${doctorId}-creatinine-high-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'high' as const,
+          message: `Elevated creatinine - ${creatinineValue} mg/dL (Normal: 0.6-1.2)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      }
+    }
+    
+    // 3. Hemoglobin alerts
+    const hemoglobinMatch = text.match(/h(?:ae)?moglobin[:\s]*(\d+(?:\.\d+)?)/i)
+    if (hemoglobinMatch) {
+      const hemoglobinValue = parseFloat(hemoglobinMatch[1])
+      console.log(`[Alert Generation] Found Hemoglobin: ${hemoglobinValue}`)
+      
+      if (hemoglobinValue < 8.0) {
+        alerts.push({
+          id: `${doctorId}-hemoglobin-critical-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'critical' as const,
+          message: `Severe anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (hemoglobinValue < 10.0) {
+        alerts.push({
+          id: `${doctorId}-hemoglobin-low-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'high' as const,
+          message: `Moderate anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (hemoglobinValue < 12.0) {
+        alerts.push({
+          id: `${doctorId}-hemoglobin-mild-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'medium' as const,
+          message: `Mild anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: false
+        })
+      }
+    }
+    
+    // 4. HbA1c alerts (Diabetes)
+    const hba1cMatch = text.match(/hba1c[:\s]*(\d+(?:\.\d+)?)/i)
+    if (hba1cMatch) {
+      const hba1cValue = parseFloat(hba1cMatch[1])
+      console.log(`[Alert Generation] Found HbA1c: ${hba1cValue}`)
+      
+      if (hba1cValue > 10.0) {
+        alerts.push({
+          id: `${doctorId}-hba1c-critical-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'critical' as const,
+          message: `Severely uncontrolled diabetes - HbA1c ${hba1cValue}% (Target: <7%)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (hba1cValue > 8.0) {
+        alerts.push({
+          id: `${doctorId}-hba1c-high-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'high' as const,
+          message: `Poorly controlled diabetes - HbA1c ${hba1cValue}% (Target: <7%)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (hba1cValue > 7.0) {
+        alerts.push({
+          id: `${doctorId}-hba1c-elevated-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'medium' as const,
+          message: `Diabetes above target - HbA1c ${hba1cValue}% (Target: <7%)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: false
+        })
+      }
+    }
+    
+    // 5. Urea alerts
+    const ureaMatch = text.match(/urea[:\s]*(\d+(?:\.\d+)?)/i)
+    if (ureaMatch) {
+      const ureaValue = parseFloat(ureaMatch[1])
+      console.log(`[Alert Generation] Found Urea: ${ureaValue}`)
+      
+      if (ureaValue > 100) {
+        alerts.push({
+          id: `${doctorId}-urea-critical-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'critical_value' as const,
+          severity: 'critical' as const,
+          message: `Critically elevated urea - ${ureaValue} mg/dL (Normal: 7-20)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      } else if (ureaValue > 50) {
+        alerts.push({
+          id: `${doctorId}-urea-high-${Date.now()}`,
+          patientId: `${doctorId}-${Date.now()}`,
+          patientName,
+          type: 'abnormal_lab' as const,
+          severity: 'high' as const,
+          message: `Elevated urea - ${ureaValue} mg/dL (Normal: 7-20)`,
+          timestamp: new Date().toISOString(),
+          actionRequired: true
+        })
+      }
+    }
+    
+    // 6. General condition-based alerts
+    if (text.includes('severe') || text.includes('critical')) {
       alerts.push({
-        id: `${doctorId}-alert-${Date.now()}`,
+        id: `${doctorId}-condition-severe-${Date.now()}`,
         patientId: `${doctorId}-${Date.now()}`,
         patientName,
         type: 'critical_value' as const,
-        severity: 'critical' as const,
-        message: 'Severe kidney dysfunction - GFR 7 mL/min, Creatinine 8.05 mg/dL',
+        severity: 'high' as const,
+        message: `Severe condition noted in report - requires immediate attention`,
         timestamp: new Date().toISOString(),
         actionRequired: true
       })
     }
     
-    if (text.includes('hemoglobin 8') || text.includes('low hemoglobin')) {
+    // 7. If no specific alerts but abnormal values mentioned
+    if (alerts.length === 0 && (text.includes('abnormal') || text.includes('elevated') || text.includes('low'))) {
       alerts.push({
-        id: `${doctorId}-alert-${Date.now() + 1}`,
+        id: `${doctorId}-general-abnormal-${Date.now()}`,
         patientId: `${doctorId}-${Date.now()}`,
         patientName,
         type: 'abnormal_lab' as const,
-        severity: 'high' as const,
-        message: 'Severe anemia - Hemoglobin 8.10 g/dL (Normal: 12-16 g/dL)',
+        severity: 'medium' as const,
+        message: `Abnormal findings in report - review recommended`,
         timestamp: new Date().toISOString(),
-        actionRequired: true
+        actionRequired: false
       })
     }
+    
+    console.log(`[Alert Generation] Generated ${alerts.length} alerts for ${patientName}`)
+    alerts.forEach((alert, index) => {
+      console.log(`[Alert Generation] Alert ${index + 1}: ${alert.severity} - ${alert.message}`)
+    })
     
     return alerts
   }
@@ -961,6 +1647,73 @@ export function DoctorDashboard() {
     }
   }
 
+  // Function to manually refresh doctor data from Patient Dashboard
+  const refreshFromPatientDashboard = () => {
+    console.log('[Doctor Dashboard] Manually refreshing from Patient Dashboard data...')
+    
+    // Debug: Check what's in localStorage
+    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
+    console.log('[Doctor Dashboard] Raw localStorage data:', savedRealPatient)
+    
+    if (savedRealPatient) {
+      try {
+        const realPatient = JSON.parse(savedRealPatient)
+        console.log('[Doctor Dashboard] Parsed patient data:', realPatient)
+        console.log('[Doctor Dashboard] Patient lab results:', realPatient.labResults)
+        console.log('[Doctor Dashboard] Patient conditions:', realPatient.conditions)
+        
+        // Create or update doctor entry for this patient
+        createDoctorFromPatientData(realPatient)
+        
+        alert(`✅ Successfully synced patient data from Patient Dashboard!\n\n👤 Patient: ${realPatient.name}\n📊 Lab Results: ${realPatient.labResults?.length || 0}\n🏥 Conditions: ${realPatient.conditions?.length || 0}\n\n🔄 Doctor dashboard updated with alerts!`)
+      } catch (error) {
+        console.error('[Doctor Dashboard] Error parsing patient data:', error)
+        alert(`❌ Error parsing patient data: ${error}`)
+      }
+    } else {
+      // Check if there are any patients with real data in current doctors
+      const hasRealPatients = doctors.some(doctor => 
+        doctor.patients.some(patient => patient.id.includes('real'))
+      )
+      
+      if (hasRealPatients) {
+        alert('ℹ️ Real patient data already loaded in Clinical Dashboard.\n\nIf you want to refresh:\n1. Go to Patient Dashboard\n2. Click "Load Your Real Patient Data" again\n3. Return here and click "Sync Patient Data"')
+      } else {
+        alert('ℹ️ No real patient data found in Patient Dashboard.\n\nTo sync data:\n1. Go to Patient Dashboard\n2. Click "Load Your Real Patient Data"\n3. Return to Clinical Dashboard\n4. Click "Sync Patient Data"')
+      }
+    }
+  }
+
+  // Function to debug the current state
+  const debugCurrentState = () => {
+    console.log('=== CLINICAL DASHBOARD DEBUG ===')
+    console.log('Current doctors:', doctors)
+    console.log('Selected doctor:', selectedDoctor)
+    console.log('Documents received:', documents)
+    
+    // Check localStorage data
+    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
+    const savedDoctors = localStorage.getItem('clinicalDashboard_doctors')
+    
+    console.log('Patient Dashboard localStorage:', savedRealPatient)
+    console.log('Clinical Dashboard localStorage:', savedDoctors)
+    
+    if (savedRealPatient) {
+      try {
+        const realPatient = JSON.parse(savedRealPatient)
+        console.log('Parsed real patient:', realPatient)
+        
+        // Check if this patient should generate alerts
+        const testAlerts = generateClinicalAlertsFromPatient(realPatient, 'test-id', 'Dr. Test')
+        console.log('Test alerts for this patient:', testAlerts)
+      } catch (error) {
+        console.error('Error parsing real patient data:', error)
+      }
+    }
+    
+    alert(`🔍 Debug info logged to console.\n\nCurrent state:\n• Doctors: ${doctors.length}\n• Selected: ${selectedDoctor?.name || 'None'}\n• Alerts: ${selectedDoctor?.alerts.length || 0}\n\nCheck browser console for detailed logs.`)
+  }
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Doctor Selector */}
@@ -1019,7 +1772,7 @@ export function DoctorDashboard() {
               <Button 
                 variant="default" 
                 size="sm"
-                onClick={addRealDoctorsFromReport}
+                onClick={loadRealDoctorData}
                 className="bg-green-600 hover:bg-green-700"
               >
                 🏥 Load Your Real Doctors
@@ -1031,6 +1784,22 @@ export function DoctorDashboard() {
                 className="text-red-600 border-red-300 hover:bg-red-50"
               >
                 🗑️ Clear Data
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={refreshFromPatientDashboard}
+                className="text-blue-600 border-blue-300 hover:bg-blue-50"
+              >
+                🔄 Sync Patient Data
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={debugCurrentState}
+                className="text-gray-600 border-gray-300 hover:bg-gray-50"
+              >
+                🔍 Debug State
               </Button>
             </div>
           </div>
