@@ -7,6 +7,8 @@ import { DocumentList } from '@/components/DocumentList'
 import { SearchBar } from '@/components/SearchBar'
 import { DocumentViewer } from '@/components/DocumentViewer'
 import { MedicalIntelligence } from '@/components/MedicalIntelligence'
+import { DoctorDashboard } from '@/components/DoctorDashboard'
+import { PatientDashboard } from '@/components/PatientDashboard'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -340,6 +342,22 @@ export default function Dashboard() {
                   Dashboard
                 </Button>
                 <Button
+                  variant={activeSection === 'clinical' ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setActiveSection('clinical')}
+                >
+                  <Activity className="mr-3 h-4 w-4" />
+                  Clinical Dashboard
+                </Button>
+                <Button
+                  variant={activeSection === 'patient' ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setActiveSection('patient')}
+                >
+                  <User className="mr-3 h-4 w-4" />
+                  Patient Dashboard
+                </Button>
+                <Button
                   variant={activeSection === 'upload' ? 'default' : 'ghost'}
                   className="w-full justify-start"
                   onClick={() => setActiveSection('upload')}
@@ -511,6 +529,20 @@ export default function Dashboard() {
                     onSelectDocument={(doc) => setSelectedDocument(doc)}
                   />
                 </Card>
+              </div>
+            )}
+
+            {/* Clinical Dashboard Section */}
+            {activeSection === 'clinical' && (
+              <div className="space-y-8">
+                <DoctorDashboard />
+              </div>
+            )}
+
+            {/* Patient Dashboard Section */}
+            {activeSection === 'patient' && (
+              <div className="space-y-8">
+                <PatientDashboard documents={safeDocuments} />
               </div>
             )}
 
