@@ -16,10 +16,12 @@ import {
   Bell,
   Download,
   Eye,
-  Plus
+  Plus,
+  Stethoscope
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DoctorWorkflowManager } from './DoctorWorkflowManager'
 
 interface PatientData {
   id: string
@@ -81,9 +83,8 @@ interface PatientDashboardProps {
 }
 
 export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
-  const [selectedPatient, setSelectedPatient] = useState<string>('current-patient')
-  const [activeTab, setActiveTab] = useState<'overview' | 'medical-history' | 'lab-results' | 'appointments' | 'documents'>('overview')
-  const [patients, setPatients] = useState<Record<string, PatientData>>({})
+  const [selectedPatient, setSelectedPatient] = useState<string>('sarah-johnson')
+  const [activeTab, setActiveTab] = useState<'overview' | 'medical-history' | 'lab-results' | 'appointments' | 'documents' | 'doctor-workflow'>('overview')
 
   // Mock patient data
   const mockPatients: Record<string, PatientData> = {
@@ -269,6 +270,8 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
     }
   }
 
+  const [patients, setPatients] = useState<Record<string, PatientData>>(mockPatients)
+
   // Function to load real patient data from uploaded documents
   const loadRealPatientData = async () => {
     console.log('[Patient Dashboard] Loading real patient data from documents...')
@@ -283,39 +286,21 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
     console.log(`[Patient Dashboard] Processing ${documents.length} documents...`)
 
-    // Try to extract from each document, prioritizing real medical documents
-    const sortedDocs = documents.slice().sort((a, b) => {
-      // Prioritize documents with longer, more detailed content (likely real medical reports)
-      const aContent = a.summary || a.content || ''
-      const bContent = b.summary || b.content || ''
-      
-      // Prioritize documents that contain "WS DHILLON" or medical terms
-      const aHasPatient = aContent.includes('WS DHILLON') || aContent.includes('lab report')
-      const bHasPatient = bContent.includes('WS DHILLON') || bContent.includes('lab report')
-      
-      if (aHasPatient && !bHasPatient) return -1
-      if (!aHasPatient && bHasPatient) return 1
-      
-      // Then prioritize by content length (more detailed documents first)
-      return bContent.length - aContent.length
-    })
-    
-    sortedDocs.forEach((doc: any, index: number) => {
+    // Try to extract from each document
+    documents.forEach((doc: any, index: number) => {
       console.log(`[Patient Dashboard] Processing document ${index + 1}: ${doc.name}`)
       console.log(`[Patient Dashboard] Document structure:`, Object.keys(doc))
       
       // Try multiple content fields in order of preference
       const content = doc.summary || doc.content || doc.extractedText || doc.text || doc.name || ''
       console.log(`[Patient Dashboard] Content length: ${content.length}`)
-      console.log(`[Patient Dashboard] Full content being processed:`, content)
       
       if (!content || content.length < 10) {
         console.log(`[Patient Dashboard] Skipping document - insufficient content`)
         return
       }
 
-      console.log(`[Patient Dashboard] Document content preview: ${content.substring(0, 1000)}...`)
-      console.log(`[Patient Dashboard] Full content being processed:`, content)
+      console.log(`[Patient Dashboard] Document content preview: ${content.substring(0, 500)}...`)
 
       // Initialize patient if not already done
       if (!extractedPatient) {
@@ -343,16 +328,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       // Enhanced patient name extraction with more flexible patterns
       const namePatterns = [
-        // Direct name extraction: "WS DHILLON, a 65-year-old"
-        /([A-Z]{1,3}\s+[A-Z]{2,}),?\s*a?\s*\d+-year-old/i,
-        // Medical report format: "This is a lab report for WS DHILLON"
-        /(?:lab report for|report for|for)\s+([A-Z]{1,3}\s+[A-Z]{2,})/i,
         // Standard formats: "Patient: John Doe", "Name: Jane Smith"
         /(?:Patient|Name|Patient Name)[:\s]*([A-Z][a-zA-Z\s]{2,30})(?:\s|,|$|\n)/i,
-        // Name in medical format: "SMITH, JOHN" or "Doe, Jane" or "WS DHILLON"
-        /\b([A-Z]{1,3}\s+[A-Z]{2,})\b/i,
         // Name followed by age/DOB: "John Doe Age 45", "Jane Smith DOB"
         /^([A-Z][a-zA-Z\s]{2,30})\s*(?:Age|age|DOB|\d)/i,
+        // Name in medical format: "SMITH, JOHN" or "Doe, Jane"
+        /([A-Z]{2,}[,\s]+[A-Z][a-zA-Z\s]{1,20})(?:\s|,|$|\n)/i,
         // Simple name patterns: "John Doe 45 years", "Jane Smith Male"
         /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+\d+|\s+(?:Male|Female|years|Age))/i,
         // Name at start of document
@@ -363,21 +344,11 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       console.log(`[Patient Dashboard] Trying ${namePatterns.length} name patterns...`)
       for (const pattern of namePatterns) {
-        console.log(`[Patient Dashboard] Testing pattern: ${pattern.source}`)
         const nameMatch = content.match(pattern)
-        console.log(`[Patient Dashboard] Pattern result:`, nameMatch)
         if (nameMatch && extractedPatient.name === 'Unknown Patient') {
           let name = nameMatch[1].trim()
-          console.log(`[Patient Dashboard] Raw extracted name: "${name}"`)
           // Clean up the name (remove extra spaces, fix case)
           name = name.replace(/\s+/g, ' ').replace(/,\s*/, ', ')
-          
-          // Special handling for medical terms that shouldn't be names
-          const invalidNames = ['all parameters', 'blood pressure', 'chest pain', 'emergency room', 'acute chest']
-          if (invalidNames.some(invalid => name.toLowerCase().includes(invalid.toLowerCase()))) {
-            console.log(`[Patient Dashboard] Skipping invalid name: "${name}"`)
-            continue
-          }
           
           // Validate name (reasonable length, contains letters)
           if (name.length > 3 && name.length < 50 && /[A-Za-z]/.test(name)) {
@@ -385,16 +356,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
             foundPatientData = true
             console.log(`[Patient Dashboard] Found patient name: ${extractedPatient.name}`)
             break
-          } else {
-            console.log(`[Patient Dashboard] Name validation failed: length=${name.length}, hasLetters=${/[A-Za-z]/.test(name)}`)
           }
         }
       }
 
       // Enhanced age extraction with more patterns
       const agePatterns = [
-        // Medical report format: "WS DHILLON, a 65-year-old male"
-        /(\d{1,3})-year-old/i,
         /(?:Age|age)[:\s]*(\d{1,3})\s*(?:years?|yo|y\.o\.|\s|$)/i,
         /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i,
         /DOB[:\s]*\d{1,2}[\/\-]\d{1,2}[\/\-](\d{4})/i,
@@ -404,9 +371,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
 
       console.log(`[Patient Dashboard] Trying ${agePatterns.length} age patterns...`)
       for (const pattern of agePatterns) {
-        console.log(`[Patient Dashboard] Testing age pattern: ${pattern.source}`)
         const ageMatch = content.match(pattern)
-        console.log(`[Patient Dashboard] Age pattern result:`, ageMatch)
         if (ageMatch && extractedPatient.age === 0) {
           if (pattern.source.includes('DOB')) {
             // Calculate age from birth year
@@ -416,22 +381,12 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
             extractedPatient.age = parseInt(ageMatch[1])
           }
           
-          console.log(`[Patient Dashboard] Raw extracted age: ${extractedPatient.age}`)
-          
-          // Skip obviously invalid ages (like dosages)
-          if (extractedPatient.age < 18 || extractedPatient.age > 120) {
-            console.log(`[Patient Dashboard] Skipping unrealistic age: ${extractedPatient.age}`)
-            extractedPatient.age = 0
-            continue
-          }
-          
           // Validate age (reasonable range)
           if (extractedPatient.age > 0 && extractedPatient.age < 150) {
             foundPatientData = true
             console.log(`[Patient Dashboard] Found patient age: ${extractedPatient.age}`)
             break
           } else {
-            console.log(`[Patient Dashboard] Age validation failed: ${extractedPatient.age}`)
             extractedPatient.age = 0 // Reset invalid age
           }
         }
@@ -569,15 +524,13 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
       })
 
       // Add document to patient record
-      if (extractedPatient) {
-        extractedPatient.documents.push({
-          name: doc.name || 'Medical Report',
-          type: doc.type || 'Lab Report',
-          date: new Date().toISOString().split('T')[0],
-          uploadedBy: 'Patient Upload',
-          size: doc.size || 'Unknown'
-        })
-      }
+      extractedPatient.documents.push({
+        name: doc.name || 'Medical Report',
+        type: doc.type || 'Lab Report',
+        date: new Date().toISOString().split('T')[0],
+        uploadedBy: 'Patient Upload',
+        size: doc.size || 'Unknown'
+      })
       foundPatientData = true
     })
 
@@ -588,7 +541,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
       if (extractedPatient && (extractedPatient as PatientData).name === 'Unknown Patient') {
         const patient = extractedPatient as PatientData
         // Look for any capitalized words that could be names
-        const allContent = documents.map(doc => doc.summary || doc.content || '').join(' ')
+        const allContent = documents.map(doc => doc.content || doc.summary || '').join(' ')
         console.log('[Patient Dashboard] Combined content length:', allContent.length)
         
         // Extract any capitalized names (more permissive)
@@ -906,7 +859,8 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
     { id: 'medical-history', label: 'Medical History', icon: FileText },
     { id: 'lab-results', label: 'Lab Results', icon: Activity },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'documents', label: 'Documents', icon: FileText }
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'doctor-workflow', label: 'Doctor Workflow', icon: Stethoscope }
   ]
 
   return (
@@ -925,7 +879,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
           >
             {Object.entries(patients).map(([id, patient]) => (
               <option key={id} value={id}>
-                {patient.name} {id === 'real-patient' ? '(Your Data)' : id.includes('johnson') || id.includes('chen') ? '(Demo)' : ''}
+                {patient.name} {id === 'current-patient' ? '(Your Data)' : '(Demo)'}
               </option>
             ))}
           </select>
@@ -939,46 +893,6 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
               console.log('Selected patient:', selectedPatient)
               console.log('Current patient data:', getCurrentPatient())
               console.log('Available documents count:', documents?.length || 0)
-              
-              // NEW: Detailed document content analysis
-              if (documents && documents.length > 0) {
-                documents.forEach((doc, i) => {
-                  console.log(`=== DOCUMENT ${i + 1} ANALYSIS ===`)
-                  console.log('Document object:', doc)
-                  console.log('Document keys:', Object.keys(doc))
-                  
-                  const content = doc.summary || doc.content || doc.extractedText || doc.text || ''
-                  console.log('Content source:', doc.summary ? 'summary' : doc.content ? 'content' : 'other')
-                  console.log('Content length:', content.length)
-                  console.log('Full content:', content)
-                  
-                  // Test specific patterns manually
-                  console.log('=== PATTERN TESTING ===')
-                  
-                  // Test name patterns
-                  const testNamePatterns = [
-                    /([A-Z]{1,3}\s+[A-Z]{2,}),?\s*a?\s*\d+-year-old/i,
-                    /(?:lab report for|report for|for)\s+([A-Z]{1,3}\s+[A-Z]{2,})/i,
-                    /\b([A-Z]{1,3}\s+[A-Z]{2,})\b/i
-                  ]
-                  
-                  testNamePatterns.forEach((pattern, idx) => {
-                    const match = content.match(pattern)
-                    console.log(`Name pattern ${idx + 1} (${pattern.source}):`, match)
-                  })
-                  
-                  // Test age patterns
-                  const testAgePatterns = [
-                    /(\d{1,3})-year-old/i,
-                    /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i
-                  ]
-                  
-                  testAgePatterns.forEach((pattern, idx) => {
-                    const match = content.match(pattern)
-                    console.log(`Age pattern ${idx + 1} (${pattern.source}):`, match)
-                  })
-                })
-              }
             }}
           >
             🔍 Debug
@@ -1029,7 +943,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
               </div>
             </div>
           </div>
-          {selectedPatient === 'real-patient' && (
+          {selectedPatient === 'current-patient' && (
             <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-full">
               Your Data
             </span>
@@ -1205,217 +1119,44 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
           </Card>
 
           {/* Quick Actions */}
-          <Card className="p-4">
-            <h4 className="font-semibold text-gray-800 mb-4">Quick Actions</h4>
-            <div className="space-y-2">
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => {
-                  const appointmentTypes = ['Follow-up', 'Routine Check-up', 'Specialist Consultation', 'Lab Work', 'Emergency']
-                  const selectedType = appointmentTypes[Math.floor(Math.random() * appointmentTypes.length)]
-                  const futureDate = new Date()
-                  futureDate.setDate(futureDate.getDate() + Math.floor(Math.random() * 30) + 7) // 1-5 weeks from now
-                  
-                  const newAppointment = {
-                    date: futureDate.toISOString().split('T')[0],
-                    time: ['9:00 AM', '10:30 AM', '2:00 PM', '3:30 PM'][Math.floor(Math.random() * 4)],
-                    doctor: currentPatient.conditions.length > 0 ? 
-                      (currentPatient.conditions[0].includes('Kidney') ? 'Dr. Williams (Nephrology)' : 'Dr. Smith (Primary Care)') :
-                      'Dr. Johnson (Primary Care)',
-                    specialty: currentPatient.conditions.length > 0 ? 
-                      (currentPatient.conditions[0].includes('Kidney') ? 'Nephrology' : 'Primary Care') :
-                      'Primary Care',
-                    type: selectedType,
-                    status: 'scheduled' as const,
-                    notes: `Scheduled via patient portal for ${currentPatient.name}`
-                  }
-                  
-                  // Update patient data
-                  const updatedPatient = { ...currentPatient }
-                  updatedPatient.appointments.unshift(newAppointment)
-                  
-                  // Update state
-                  const allPatients = { ...patients }
-                  allPatients[selectedPatient] = updatedPatient
-                  setPatients(allPatients)
-                  
-                  // Save to localStorage if it's real patient data
-                  if (selectedPatient === 'real-patient') {
-                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
-                  }
-                  
-                  alert(`✅ Appointment Scheduled!\n\n📅 Date: ${newAppointment.date}\n🕐 Time: ${newAppointment.time}\n👨‍⚕️ Doctor: ${newAppointment.doctor}\n📋 Type: ${newAppointment.type}\n\n📧 Confirmation email sent!\n📱 SMS reminder will be sent 24 hours before.`)
-                }}
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Schedule Appointment
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => {
-                  const recordTypes = [
-                    'Complete Medical History',
-                    'Lab Results (Last 6 months)',
-                    'Prescription History',
-                    'Imaging Reports',
-                    'Vaccination Records',
-                    'Specialist Consultation Notes'
-                  ]
-                  
-                  const requestId = `REQ-${Date.now().toString().slice(-6)}`
-                  const processingTime = '3-5 business days'
-                  
-                  // Simulate adding a new document request
-                  const newDocument = {
-                    name: `Medical Records Request - ${requestId}`,
-                    type: 'Record Request',
-                    date: new Date().toISOString().split('T')[0],
-                    uploadedBy: 'Patient Portal',
-                    size: 'Processing...'
-                  }
-                  
-                  // Update patient data
-                  const updatedPatient = { ...currentPatient }
-                  updatedPatient.documents.unshift(newDocument)
-                  
-                  // Update state
-                  const allPatients = { ...patients }
-                  allPatients[selectedPatient] = updatedPatient
-                  setPatients(allPatients)
-                  
-                  // Save to localStorage if it's real patient data
-                  if (selectedPatient === 'real-patient') {
-                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
-                  }
-                  
-                  alert(`📋 Medical Records Request Submitted!\n\n🆔 Request ID: ${requestId}\n⏱️ Processing Time: ${processingTime}\n📧 Email: Records will be sent to your registered email\n🔒 Security: Records will be encrypted and password protected\n\nAvailable Records:\n${recordTypes.map(type => `• ${type}`).join('\n')}\n\n✅ You'll receive an email confirmation shortly.`)
-                }}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Request Records
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => {
-                  if (currentPatient.medications.length === 0) {
-                    alert('❌ No Current Medications\n\nYou don\'t have any active prescriptions to refill.\nPlease contact your doctor if you need new prescriptions.')
-                    return
-                  }
-                  
-                  const medicationsToRefill = currentPatient.medications.map(med => ({
-                    name: med.name,
-                    dosage: med.dosage,
-                    frequency: med.frequency,
-                    prescribedBy: med.prescribedBy,
-                    refillId: `RX-${Date.now().toString().slice(-6)}`,
-                    estimatedReady: (() => {
-                      const date = new Date()
-                      date.setDate(date.getDate() + Math.floor(Math.random() * 3) + 1) // 1-3 days
-                      return date.toISOString().split('T')[0]
-                    })(),
-                    pharmacy: 'CVS Pharmacy - Main St',
-                    copay: '$' + (Math.floor(Math.random() * 30) + 10) // $10-40
-                  }))
-                  
-                  // Update patient medications with new prescription dates
-                  const updatedPatient = { ...currentPatient }
-                  updatedPatient.medications = updatedPatient.medications.map(med => ({
-                    ...med,
-                    prescribedDate: new Date().toISOString().split('T')[0]
-                  }))
-                  
-                  // Update state
-                  const allPatients = { ...patients }
-                  allPatients[selectedPatient] = updatedPatient
-                  setPatients(allPatients)
-                  
-                  // Save to localStorage if it's real patient data
-                  if (selectedPatient === 'real-patient') {
-                    localStorage.setItem('patientDashboard_realPatient', JSON.stringify(updatedPatient))
-                  }
-                  
-                  const refillDetails = medicationsToRefill.map(med => 
-                    `💊 ${med.name} ${med.dosage}\n   📋 ${med.refillId} | 📅 Ready: ${med.estimatedReady}\n   💰 Copay: ${med.copay}`
-                  ).join('\n\n')
-                  
-                  alert(`💊 Prescription Refill Requested!\n\n${refillDetails}\n\n🏪 Pharmacy: ${medicationsToRefill[0].pharmacy}\n📱 SMS: You'll receive pickup notifications\n🚗 Pickup: Drive-thru available\n💳 Payment: Copay due at pickup\n\n✅ All refill requests submitted successfully!`)
-                }}
-              >
-                <Pill className="h-4 w-4 mr-2" />
-                Refill Prescription
-              </Button>
-              <Button 
-                className="w-full justify-start" 
-                variant="outline"
-                onClick={() => {
-                  if (currentPatient.medications.length === 0) {
-                    alert('❌ No Current Medications\n\nYou don\'t have any active medications to set reminders for.\nPlease add medications first or contact your doctor.')
-                    return
-                  }
-                  
-                  const reminderTimes = ['8:00 AM', '12:00 PM', '6:00 PM', '9:00 PM']
-                  const selectedTime = reminderTimes[Math.floor(Math.random() * reminderTimes.length)]
-                  
-                  const medicationReminders = currentPatient.medications.map(med => {
-                    const frequency = med.frequency.toLowerCase()
-                    let reminderSchedule = ''
-                    
-                    if (frequency.includes('once') || frequency.includes('daily')) {
-                      reminderSchedule = `Daily at ${selectedTime}`
-                    } else if (frequency.includes('twice')) {
-                      reminderSchedule = `Twice daily at 8:00 AM and 8:00 PM`
-                    } else if (frequency.includes('three') || frequency.includes('3')) {
-                      reminderSchedule = `Three times daily at 8:00 AM, 2:00 PM, and 8:00 PM`
-                    } else {
-                      reminderSchedule = `As prescribed (${med.frequency})`
-                    }
-                    
-                    return {
-                      medication: `${med.name} ${med.dosage}`,
-                      schedule: reminderSchedule,
-                      reminderId: `REM-${Date.now().toString().slice(-6)}`
-                    }
-                  })
-                  
-                  // Simulate saving reminder preferences
-                  const reminderSettings = {
-                    enabled: true,
-                    method: ['Push Notification', 'SMS', 'Email'],
-                    snoozeOption: '15 minutes',
-                    missedDoseAlert: 'After 2 hours',
-                    setupDate: new Date().toISOString().split('T')[0]
-                  }
-                  
-                  const reminderList = medicationReminders.map(reminder => 
-                    `💊 ${reminder.medication}\n   ⏰ ${reminder.schedule}\n   🆔 ${reminder.reminderId}`
-                  ).join('\n\n')
-                  
-                  alert(`⏰ Medication Reminders Set!\n\n${reminderList}\n\n📱 Notification Methods:\n• Push notifications\n• SMS alerts\n• Email reminders\n\n⚙️ Settings:\n• Snooze: ${reminderSettings.snoozeOption}\n• Missed dose alert: ${reminderSettings.missedDoseAlert}\n• Smart scheduling based on meal times\n\n✅ All reminders activated!\n🔔 First reminder will be sent at the next scheduled time.`)
-                }}
-              >
-                <Bell className="h-4 w-4 mr-2" />
-                Set Medication Reminder
-              </Button>
-            </div>
-          </Card>
+          <div className="space-y-4">
+            <Card className="p-4">
+              <h4 className="font-semibold text-gray-800 mb-4">Quick Actions</h4>
+              <div className="space-y-2">
+                <Button className="w-full justify-start" variant="outline">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Schedule Appointment
+                </Button>
+                <Button className="w-full justify-start" variant="outline">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Request Records
+                </Button>
+                <Button className="w-full justify-start" variant="outline">
+                  <Pill className="h-4 w-4 mr-2" />
+                  Refill Prescription
+                </Button>
+                <Button className="w-full justify-start" variant="outline">
+                  <Bell className="h-4 w-4 mr-2" />
+                  Set Medication Reminder
+                </Button>
+              </div>
+            </Card>
 
-          <Card className="p-4">
-            <h4 className="font-semibold text-gray-800 mb-4">Emergency Contact</h4>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="font-medium">Name:</span> {currentPatient.emergencyContact.name}
+            <Card className="p-4">
+              <h4 className="font-semibold text-gray-800 mb-4">Emergency Contact</h4>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="font-medium">Name:</span> {currentPatient.emergencyContact.name}
+                </div>
+                <div>
+                  <span className="font-medium">Phone:</span> {currentPatient.emergencyContact.phone}
+                </div>
+                <div>
+                  <span className="font-medium">Relationship:</span> {currentPatient.emergencyContact.relationship}
+                </div>
               </div>
-              <div>
-                <span className="font-medium">Phone:</span> {currentPatient.emergencyContact.phone}
-              </div>
-              <div>
-                <span className="font-medium">Relationship:</span> {currentPatient.emergencyContact.relationship}
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
         </div>
       )}
@@ -1615,6 +1356,10 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
             )}
           </div>
         </Card>
+      )}
+
+      {activeTab === 'doctor-workflow' && (
+        <DoctorWorkflowManager />
       )}
     </div>
   )

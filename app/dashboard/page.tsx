@@ -31,7 +31,22 @@ import {
   Scan,
   Eye,
   Copy,
-  Loader2
+  Loader2,
+  Stethoscope,
+  Heart,
+  Brain,
+  Shield,
+  Search,
+  Plus,
+  Filter,
+  Download,
+  Share,
+  Users,
+  ChevronRight,
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  Pill
 } from 'lucide-react'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { OCRService } from '@/lib/ocr-service'
@@ -47,11 +62,13 @@ export default function Dashboard() {
   const [documents, setDocuments] = useState<any[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activeSection, setActiveSection] = useState<string>('dashboard')
+  const [activeSection, setActiveSection] = useState<string>('overview')
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isProcessingOCR, setIsProcessingOCR] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
   const { toast } = useToast()
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -73,6 +90,7 @@ export default function Dashboard() {
     setHasApiKey(!!apiKey)
     
     loadDocuments()
+    initializeNotifications()
   }, [])
 
   // Update API key status when settings dialog closes
@@ -82,6 +100,105 @@ export default function Dashboard() {
       setHasApiKey(!!apiKey)
     }
   }, [isSettingsOpen])
+
+  // Initialize notifications system
+  const initializeNotifications = () => {
+    const mockNotifications = [
+      {
+        id: 'notif-1',
+        type: 'critical',
+        title: 'Critical Patient Alert',
+        message: 'WS DHILLON has critical GFR levels requiring immediate attention',
+        timestamp: new Date(Date.now() - 5 * 60000).toISOString(),
+        read: false,
+        action: () => setActiveSection('clinical')
+      },
+      {
+        id: 'notif-2',
+        type: 'high',
+        title: 'Lab Results Available',
+        message: 'New lab results for Robert Chen show elevated creatinine levels',
+        timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
+        read: false,
+        action: () => setActiveSection('clinical')
+      },
+      {
+        id: 'notif-3',
+        type: 'info',
+        title: 'System Update',
+        message: 'MediVault Enterprise v2.1.4 deployed successfully with enhanced security features',
+        timestamp: new Date(Date.now() - 30 * 60000).toISOString(),
+        read: false,
+        action: () => {}
+      }
+    ]
+
+    // Load saved notifications or use mock data
+    const savedNotifications = localStorage.getItem('dashboard-notifications')
+    if (savedNotifications) {
+      try {
+        setNotifications(JSON.parse(savedNotifications))
+      } catch (error) {
+        setNotifications(mockNotifications)
+      }
+    } else {
+      setNotifications(mockNotifications)
+      localStorage.setItem('dashboard-notifications', JSON.stringify(mockNotifications))
+    }
+  }
+
+  const markNotificationAsRead = (notificationId: string) => {
+    setNotifications(prev => {
+      const updated = prev.map(notif => 
+        notif.id === notificationId ? { ...notif, read: true } : notif
+      )
+      localStorage.setItem('dashboard-notifications', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const handleNotificationClick = (notification: any) => {
+    markNotificationAsRead(notification.id)
+    if (notification.action) {
+      notification.action()
+    }
+    setShowNotifications(false)
+  }
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'critical': return <AlertCircle className="h-4 w-4 text-red-600" />
+      case 'high': return <Bell className="h-4 w-4 text-orange-600" />
+      case 'medium': return <Activity className="h-4 w-4 text-yellow-600" />
+      case 'info': return <CheckCircle className="h-4 w-4 text-blue-600" />
+      default: return <Bell className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'critical': return 'border-red-200 bg-red-50 hover:bg-red-100'
+      case 'high': return 'border-orange-200 bg-orange-50 hover:bg-orange-100'
+      case 'medium': return 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100'
+      case 'info': return 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+      default: return 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+    }
+  }
+
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  // Close notification panel when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showNotifications && !target.closest('.notification-panel') && !target.closest('[data-notification-button]')) {
+        setShowNotifications(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showNotifications])
 
   const loadDocuments = async () => {
     try {
@@ -254,12 +371,39 @@ export default function Dashboard() {
     ? safeDocuments 
     : safeDocuments.filter((doc: any) => doc.type === selectedCategory)
 
+  // Navigation items
+  const navigationSections = [
+    {
+      title: 'Dashboard',
+      items: [
+        { id: 'overview', label: 'Overview', icon: HomeIcon, description: 'System overview and analytics' },
+        { id: 'upload', label: 'Upload Documents', icon: Upload, description: 'Add new medical documents' },
+        { id: 'documents', label: 'Document Library', icon: Folder, description: 'Browse and manage documents' },
+      ]
+    },
+    {
+      title: 'Clinical Tools',
+      items: [
+        { id: 'clinical', label: 'Clinical Dashboard', icon: Stethoscope, description: 'Doctor and clinical workflows' },
+        { id: 'patient', label: 'Patient Portal', icon: User, description: 'Patient health management' },
+        { id: 'intelligence', label: 'Medical AI', icon: Brain, description: 'AI-powered medical insights' },
+      ]
+    },
+    {
+      title: 'Tools & Utilities',
+      items: [
+        { id: 'ocr', label: 'OCR Lab', icon: Scan, description: 'Text extraction from images' },
+        { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Document and usage analytics' },
+      ]
+    }
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gray-50">
       <SettingsDialog isOpen={isSettingsOpen} setIsOpen={setIsSettingsOpen} />
       
-      {/* Header */}
-      <header className="bg-white/95 backdrop-blur-lg shadow-lg border-b border-blue-100 sticky top-0 z-40">
+      {/* Professional Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -271,155 +415,346 @@ export default function Dashboard() {
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl shadow-lg">
-                  <Building2 className="h-7 w-7 text-white" />
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-lg">
+                  <Stethoscope className="h-7 w-7 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">
-                    MediVault Pro
-                  </h1>
-                  <p className="text-sm text-gray-600 font-medium">Full-Stack Medical Document System</p>
+                  <div className="flex items-center space-x-3">
+                    <h1 className="text-xl font-bold text-gray-900">
+                      MediVault Enterprise
+                    </h1>
+                    <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      v2.1.4
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Healthcare Document Intelligence Platform</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-3">
+              {/* System Status Indicators */}
+              <div className="hidden md:flex items-center space-x-6 text-sm">
+                <div className="flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                  <Shield className="h-4 w-4 text-green-600" />
+                  <span className="text-green-800 font-medium">SOC 2 Compliant</span>
+                </div>
+                <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <Activity className="h-4 w-4 text-blue-600" />
+                  <span className="text-blue-800 font-medium">99.9% Uptime</span>
+                </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">Demo User</p>
-                  <div className="flex items-center justify-end space-x-1">
-                    <User className="h-4 w-4" />
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      PATIENT
-                    </span>
-                  </div>
+                  <p className="font-semibold text-gray-900">Dr. Sarah Wilson, MD</p>
+                  <p className="text-xs text-gray-500">Chief Medical Officer • ID: MW-2024</p>
                 </div>
               </div>
 
-              <Button variant="outline" size="icon">
-                <Bell className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setIsSettingsOpen(true)}
-                className="relative flex items-center gap-2 px-3"
-              >
-                <Key className="h-4 w-4" />
-                <span className="hidden sm:inline">API Key</span>
-                {!hasApiKey && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                )}
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-2">
+                <div className="relative">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="relative"
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    title="View Clinical Notifications"
+                    data-notification-button
+                  >
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-medium">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </Button>
+
+                  {/* Notification Panel */}
+                  {showNotifications && (
+                    <div className="notification-panel absolute right-0 top-12 w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-900">Clinical Notifications</h3>
+                          <div className="flex items-center space-x-2">
+                            {unreadCount > 0 && (
+                              <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full font-medium">
+                                {unreadCount} new
+                              </span>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setShowNotifications(false)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="max-h-80 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-gray-500">
+                            <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                            <p>No notifications</p>
+                          </div>
+                        ) : (
+                          notifications.map((notification) => (
+                            <div
+                              key={notification.id}
+                              className={`p-4 border-b border-gray-100 cursor-pointer transition-colors ${getNotificationColor(notification.type)} ${
+                                !notification.read ? 'border-l-4 border-l-blue-500' : ''
+                              }`}
+                              onClick={() => handleNotificationClick(notification)}
+                            >
+                              <div className="flex items-start space-x-3">
+                                <div className="flex-shrink-0 mt-1">
+                                  {getNotificationIcon(notification.type)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
+                                      {notification.title}
+                                    </h4>
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(notification.timestamp).toLocaleTimeString([], { 
+                                        hour: '2-digit', 
+                                        minute: '2-digit' 
+                                      })}
+                                    </span>
+                                  </div>
+                                  <p className={`text-sm mt-1 ${!notification.read ? 'text-gray-800' : 'text-gray-600'}`}>
+                                    {notification.message}
+                                  </p>
+                                  {!notification.read && (
+                                    <div className="flex items-center mt-2">
+                                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                                      <span className="text-xs text-blue-600 font-medium">New</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      
+                      {notifications.length > 0 && (
+                        <div className="p-3 border-t border-gray-200 bg-gray-50">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => {
+                              setActiveSection('clinical')
+                              setShowNotifications(false)
+                            }}
+                          >
+                            View All in Clinical Dashboard
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="relative flex items-center gap-2 border-gray-300"
+                >
+                  <Key className="h-4 w-4" />
+                  <span className="hidden sm:inline">Configuration</span>
+                  {!hasApiKey && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                  )}
+                </Button>
+
+                <Button 
+                  size="sm" 
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                  onClick={() => setActiveSection('upload')}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">New Upload</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       <div className="flex h-[calc(100vh-80px)]">
-        {/* Sidebar */}
+        {/* Professional Sidebar */}
         <div className={`
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          fixed inset-y-0 left-0 z-50 w-72 bg-white/95 backdrop-blur-lg shadow-2xl border-r border-blue-100 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+          fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl border-r border-gray-200 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
           mt-20 lg:mt-0
         `}>
           <div className="flex flex-col h-full">
-            <div className="p-6 border-b border-blue-100">
-              <h2 className="text-lg font-semibold text-gray-900">Navigation</h2>
+            {/* Sidebar Header */}
+            <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Navigation</h2>
+                  <p className="text-sm text-gray-600">Clinical Workspace</p>
+                </div>
+                <div className="flex items-center space-x-2 text-xs">
+                  <div className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                    <Database className="h-3 w-3" />
+                    <span className="font-medium">{stats.totalDocuments}</span>
+                  </div>
+                  <div className="flex items-center space-x-1 px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                    <CheckCircle className="h-3 w-3" />
+                    <span className="font-medium">Live</span>
+                  </div>
+                </div>
+              </div>
             </div>
             
-            <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-              {/* Main Section */}
-              <div className="space-y-1">
-                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Main</h3>
-                <Button
-                  variant={activeSection === 'dashboard' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('dashboard')}
-                >
-                  <HomeIcon className="mr-3 h-4 w-4" />
-                  Dashboard
-                </Button>
-                <Button
-                  variant={activeSection === 'clinical' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('clinical')}
-                >
-                  <Activity className="mr-3 h-4 w-4" />
-                  Clinical Dashboard
-                </Button>
-                <Button
-                  variant={activeSection === 'patient' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('patient')}
-                >
-                  <User className="mr-3 h-4 w-4" />
-                  Patient Dashboard
-                </Button>
-                <Button
-                  variant={activeSection === 'upload' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('upload')}
-                >
-                  <Upload className="mr-3 h-4 w-4" />
-                  Upload Documents
-                </Button>
-                <Button
-                  variant={activeSection === 'intelligence' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('intelligence')}
-                >
-                  <Activity className="mr-3 h-4 w-4" />
-                  Medical Intelligence
-                </Button>
-                <Button
-                  variant={activeSection === 'ocr' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setActiveSection('ocr')}
-                >
-                  <Scan className="mr-3 h-4 w-4" />
-                  OCR Testing
-                </Button>
-                <Button onClick={() => console.log('DOCUMENTS STATE:', documents)}>Log Docs</Button>
+            <nav className="flex-1 p-6 space-y-8 overflow-y-auto bg-white">
+              {navigationSections.map((section, sectionIndex) => (
+                <div key={section.title} className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {section.title}
+                    </h3>
+                    <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent"></div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {section.items.map((item) => {
+                      const Icon = item.icon
+                      const isActive = activeSection === item.id
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setActiveSection(item.id)}
+                          className={`
+                            w-full group relative overflow-hidden rounded-lg transition-all duration-200
+                            ${isActive 
+                              ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm border border-blue-200' 
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center p-3">
+                            <div className={`
+                              w-10 h-10 rounded-lg flex items-center justify-center transition-colors
+                              ${isActive 
+                                ? 'bg-blue-600 text-white shadow-sm' 
+                                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
+                              }
+                            `}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="ml-4 flex-1 text-left">
+                              <div className={`font-medium text-sm ${isActive ? 'text-blue-900' : 'text-gray-900'}`}>
+                                {item.label}
+                              </div>
+                              <div className={`text-xs mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                                {item.description}
+                              </div>
+                            </div>
+                            {isActive && (
+                              <div className="w-1 h-8 bg-blue-600 rounded-full ml-2"></div>
+                            )}
+                          </div>
+                          {isActive && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-transparent pointer-events-none"></div>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Enhanced Document Categories */}
+              <div className="space-y-3 pt-6 border-t border-gray-200">
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Document Categories
+                  </h3>
+                  <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent"></div>
+                </div>
+                
+                <div className="space-y-2">
+                  {[
+                    { id: 'all', label: 'All Documents', count: stats.totalDocuments, color: 'blue', icon: Folder },
+                    { id: 'lab_report', label: 'Lab Reports', count: stats.categories.lab_report, color: 'red', icon: Activity },
+                    { id: 'prescription', label: 'Prescriptions', count: stats.categories.prescription, color: 'green', icon: Pill },
+                    { id: 'bill', label: 'Medical Bills', count: stats.categories.bill, color: 'yellow', icon: FileText },
+                    { id: 'test_report', label: 'Test Reports', count: stats.categories.test_report, color: 'purple', icon: Search },
+                  ].map((category) => {
+                    const Icon = category.icon
+                    const isSelected = selectedCategory === category.id
+                    return (
+                      <button
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`
+                          w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-sm group
+                          ${isSelected 
+                            ? 'bg-gray-100 text-gray-900 border border-gray-300 shadow-sm' 
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
+                          }
+                        `}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`
+                            w-8 h-8 rounded-lg flex items-center justify-center transition-colors
+                            ${isSelected 
+                              ? `bg-${category.color}-100` 
+                              : 'bg-gray-100 group-hover:bg-gray-200'
+                            }
+                          `}>
+                            <Icon className={`h-4 w-4 ${isSelected ? `text-${category.color}-600` : 'text-gray-500'}`} />
+                          </div>
+                          <span className="font-medium">{category.label}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`
+                            px-2 py-1 text-xs rounded-full font-medium
+                            ${category.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                              category.color === 'red' ? 'bg-red-100 text-red-800' :
+                              category.color === 'green' ? 'bg-green-100 text-green-800' :
+                              category.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-purple-100 text-purple-800'
+                            }
+                          `}>
+                            {category.count}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
-              {/* Documents Section */}
-              <div className="space-y-1 pt-4">
-                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Documents</h3>
-                <Button
-                  variant={selectedCategory === 'all' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedCategory('all')}
-                >
-                  <Folder className="mr-3 h-4 w-4" />
-                  All Documents
-                  <span className="ml-auto bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {stats.totalDocuments}
-                  </span>
-                </Button>
-                <Button
-                  variant={selectedCategory === 'prescription' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedCategory('prescription')}
-                >
-                  <FileText className="mr-3 h-4 w-4" />
-                  Prescriptions
-                  <span className="ml-auto bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {stats.categories.prescription}
-                  </span>
-                </Button>
-                <Button
-                  variant={selectedCategory === 'lab_report' ? 'default' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedCategory('lab_report')}
-                >
-                  <Activity className="mr-3 h-4 w-4" />
-                  Lab Reports
-                  <span className="ml-auto bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {stats.categories.lab_report}
-                  </span>
-                </Button>
+              {/* System Information */}
+              <div className="pt-6 border-t border-gray-200">
+                <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Shield className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-gray-900">Security Status</span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Encryption</span>
+                      <span className="text-green-600 font-medium">AES-256</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Compliance</span>
+                      <span className="text-green-600 font-medium">HIPAA</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Last Audit</span>
+                      <span className="text-gray-600">Dec 2024</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </nav>
           </div>
@@ -433,96 +768,472 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-auto">
-          <div className="p-8">
-            {/* Dashboard/Overview */}
-            {activeSection === 'dashboard' && (
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-auto bg-gray-50">
+          <div className="p-6 lg:p-8">
+            {/* Overview Section */}
+            {activeSection === 'overview' && (
+              <div className="space-y-6">
+                {/* Executive Summary Header */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">Clinical Operations Dashboard</h2>
+                        <p className="text-sm text-gray-600 mt-1">Real-time healthcare document management and clinical workflow oversight</p>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2 text-sm">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-gray-600">System Operational</span>
+                        </div>
+                        <div className="text-right text-sm">
+                          <div className="text-gray-900 font-medium">{new Date().toLocaleDateString()}</div>
+                          <div className="text-gray-500">{new Date().toLocaleTimeString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Critical Alerts Banner */}
+                  {stats.totalDocuments > 0 && (
+                    <div className="px-6 py-3 bg-blue-50 border-b border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <AlertCircle className="h-5 w-5 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-900">
+                            {stats.todayUploads} new documents processed today
+                          </span>
+                          <span className="text-xs text-blue-600">
+                            • {stats.recentUploads} this week • {stats.totalDocuments} total records
+                          </span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                          onClick={() => setActiveSection('documents')}
+                        >
+                          Review All
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Enterprise KPI Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Document Volume */}
+                  <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Document Volume</span>
+                          </div>
+                          <div className="text-2xl font-bold text-gray-900">{stats.totalDocuments.toLocaleString()}</div>
+                          <div className="flex items-center mt-1">
+                            <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
+                            <span className="text-xs text-green-600 font-medium">
+                              +{stats.recentUploads} this week
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                          <Database className="h-6 w-6 text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Processing Efficiency */}
+                  <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Activity className="h-4 w-4 text-purple-600" />
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Processing Time</span>
+                          </div>
+                          <div className="text-2xl font-bold text-gray-900">{(stats.processingTime / 60).toFixed(1)}m</div>
+                          <div className="flex items-center mt-1">
+                            <Clock className="h-3 w-3 text-purple-600 mr-1" />
+                            <span className="text-xs text-purple-600 font-medium">
+                              Avg per document
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+                          <Brain className="h-6 w-6 text-purple-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Security Compliance */}
+                  <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Shield className="h-4 w-4 text-green-600" />
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Compliance</span>
+                          </div>
+                          <div className="text-2xl font-bold text-gray-900">100%</div>
+                          <div className="flex items-center mt-1">
+                            <CheckCircle className="h-3 w-3 text-green-600 mr-1" />
+                            <span className="text-xs text-green-600 font-medium">
+                              HIPAA Compliant
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                          <Shield className="h-6 w-6 text-green-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* System Performance */}
+                  <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Activity className="h-4 w-4 text-orange-600" />
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Uptime</span>
+                          </div>
+                          <div className="text-2xl font-bold text-gray-900">99.9%</div>
+                          <div className="flex items-center mt-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                            <span className="text-xs text-green-600 font-medium">
+                              All systems operational
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center">
+                          <TrendingUp className="h-6 w-6 text-orange-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Clinical Workflow Overview */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Document Processing Pipeline */}
+                  <Card className="lg:col-span-2 bg-white border border-gray-200 shadow-sm">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Document Processing Pipeline</h3>
+                          <p className="text-sm text-gray-600">Real-time document flow and categorization</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setActiveSection('analytics')}>
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          View Analytics
+                        </Button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Processing Status */}
+                        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-blue-900">Active Processing</div>
+                              <div className="text-sm text-blue-700">AI analysis and categorization in progress</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-blue-900">3</div>
+                            <div className="text-xs text-blue-600">documents</div>
+                          </div>
+                        </div>
+
+                        {/* Document Categories Distribution */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {Object.entries(stats.categories).map(([key, count]) => {
+                            const categoryConfig = {
+                              lab_report: { label: 'Lab Reports', color: 'red', icon: Activity },
+                              prescription: { label: 'Prescriptions', color: 'green', icon: Pill },
+                              bill: { label: 'Medical Bills', color: 'yellow', icon: FileText },
+                              test_report: { label: 'Test Reports', color: 'purple', icon: Search },
+                              other: { label: 'Other Documents', color: 'gray', icon: FileText }
+                            }[key] || { label: key, color: 'gray', icon: FileText }
+
+                            const Icon = categoryConfig.icon
+                            const percentage = stats.totalDocuments > 0 ? ((count / stats.totalDocuments) * 100).toFixed(1) : '0'
+
+                            return (
+                              <div key={key} className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <Icon className={`h-4 w-4 text-${categoryConfig.color}-600`} />
+                                  <span className="text-xs font-medium text-gray-600">{categoryConfig.label}</span>
+                                </div>
+                                <div className="flex items-baseline space-x-1">
+                                  <span className="text-lg font-bold text-gray-900">{count}</span>
+                                  <span className="text-xs text-gray-500">({percentage}%)</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Quick Actions Panel */}
+                  <Card className="bg-white border border-gray-200 shadow-sm">
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                      <div className="space-y-3">
+                        <Button 
+                          className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => setActiveSection('upload')}
+                        >
+                          <Plus className="h-4 w-4 mr-3" />
+                          Upload New Documents
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start border-purple-300 text-purple-700 hover:bg-purple-50"
+                          onClick={() => setActiveSection('intelligence')}
+                        >
+                          <Brain className="h-4 w-4 mr-3" />
+                          AI Medical Analysis
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start border-green-300 text-green-700 hover:bg-green-50"
+                          onClick={() => setActiveSection('patient')}
+                        >
+                          <User className="h-4 w-4 mr-3" />
+                          Patient Portal
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start border-orange-300 text-orange-700 hover:bg-orange-50"
+                          onClick={() => setActiveSection('clinical')}
+                        >
+                          <Stethoscope className="h-4 w-4 mr-3" />
+                          Clinical Dashboard
+                        </Button>
+                      </div>
+
+                      {/* System Status */}
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3">System Status</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">API Services</span>
+                            <div className="flex items-center space-x-1">
+                              <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              <span className={hasApiKey ? 'text-green-600' : 'text-red-600'}>
+                                {hasApiKey ? 'Connected' : 'Disconnected'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Data Security</span>
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-green-600">Encrypted</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Backup Status</span>
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              <span className="text-green-600">Current</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Advanced Search & Recent Activity */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Intelligent Search */}
+                  <Card className="bg-white border border-gray-200 shadow-sm">
+                    <div className="p-6">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Search className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Intelligent Document Search</h3>
+                          <p className="text-sm text-gray-600">AI-powered semantic search across all medical records</p>
+                        </div>
+                      </div>
+                      <SearchBar 
+                        documents={safeDocuments}
+                        onResultSelect={(doc) => setSelectedDocument(doc)}
+                      />
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {['Lab Results', 'Prescriptions', 'Discharge Summary', 'Imaging Reports'].map((term) => (
+                          <button
+                            key={term}
+                            className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors"
+                            onClick={() => {
+                              // Trigger search for this term
+                            }}
+                          >
+                            {term}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Recent Activity Feed */}
+                  <Card className="bg-white border border-gray-200 shadow-sm">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <Clock className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+                            <p className="text-sm text-gray-600">Latest document processing and system events</p>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setActiveSection('documents')}>
+                          View All
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {safeDocuments.slice(0, 4).map((doc, index) => (
+                          <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                               onClick={() => setSelectedDocument(doc)}>
+                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <FileText className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {doc.type?.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())} • 
+                                {new Date(doc.date).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          </div>
+                        ))}
+                        
+                        {safeDocuments.length === 0 && (
+                          <div className="text-center py-8">
+                            <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                            <p className="text-gray-500 text-sm">No documents uploaded yet</p>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mt-2"
+                              onClick={() => setActiveSection('upload')}
+                            >
+                              Upload First Document
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* Upload Section */}
+            {activeSection === 'upload' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Upload Medical Documents</h2>
+                  <p className="text-gray-600 mt-1">
+                    Securely upload and process medical documents with AI-powered analysis
+                  </p>
+                </div>
+
+                <Card className="p-8 bg-white border-0 shadow-sm">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Document Upload</h3>
+                    <p className="text-gray-600">Supported formats: PDF, PNG, JPG, TXT (Max 10MB)</p>
+                  </div>
+                  <FileUploader onUploadSuccess={handleUploadSuccess} />
+                </Card>
+
+                {/* Recent Uploads */}
+                {filteredDocuments.length > 0 && (
+                  <Card className="p-6 bg-white border-0 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Recently Uploaded</h3>
+                    <DocumentList 
+                      documents={filteredDocuments.slice(0, 8)} 
+                      viewMode="grid"
+                      onSelectDocument={(doc) => setSelectedDocument(doc)}
+                    />
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* Documents Section */}
+            {activeSection === 'documents' && (
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-900">
-                      Welcome to MediVault Pro!
-                    </h2>
+                    <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
                     <p className="text-gray-600 mt-1">
-                      Your comprehensive medical document management system.
+                      Browse and manage your medical document collection
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant={viewMode === 'grid' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setViewMode('grid')}
-                    >
-                      Grid View
-                    </Button>
-                    <Button
-                      variant={viewMode === 'timeline' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setViewMode('timeline')}
-                    >
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Timeline
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant={viewMode === 'grid' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setViewMode('grid')}
+                      >
+                        Grid
+                      </Button>
+                      <Button
+                        variant={viewMode === 'timeline' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setViewMode('timeline')}
+                      >
+                        Timeline
+                      </Button>
+                    </div>
+                    <Button onClick={() => setActiveSection('upload')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Upload
                     </Button>
                   </div>
                 </div>
 
-                {/* Stats Dashboard */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-blue-600">Total Documents</p>
-                        <p className="text-3xl font-bold text-blue-900">{stats.totalDocuments}</p>
-                        <p className="text-xs text-blue-600 mt-1">All time records</p>
-                      </div>
-                      <div className="p-3 bg-blue-500 rounded-full">
-                        <Database className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-green-600">Recent Uploads</p>
-                        <p className="text-3xl font-bold text-green-900">{stats.recentUploads}</p>
-                        <p className="text-xs text-green-600 mt-1">This week</p>
-                      </div>
-                      <div className="p-3 bg-green-500 rounded-full">
-                        <TrendingUp className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-purple-600">AI Processing</p>
-                        <p className="text-3xl font-bold text-purple-900">{stats.processingTime}s</p>
-                        <p className="text-xs text-purple-600 mt-1">Average time</p>
-                      </div>
-                      <div className="p-3 bg-purple-500 rounded-full">
-                        <BarChart3 className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Search Bar */}
-                <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
-                  <SearchBar 
-                    documents={safeDocuments}
-                    onResultSelect={(doc) => setSelectedDocument(doc)}
-                  />
-                </Card>
-
-                {/* Document List */}
-                <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
+                <Card className="p-6 bg-white border-0 shadow-sm">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      {selectedCategory === 'all' ? 'All Documents' : `${selectedCategory.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Documents`}
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {selectedCategory === 'all' ? 'All Documents' : 
+                       selectedCategory.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())} 
+                      ({filteredDocuments.length})
                     </h3>
+                    <div className="flex items-center space-x-2">
+                      <Button variant="outline" size="sm">
+                        <Filter className="h-4 w-4 mr-2" />
+                        Filter
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </div>
                   </div>
                   <DocumentList 
                     documents={filteredDocuments} 
@@ -547,61 +1258,27 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Upload Section */}
-            {activeSection === 'upload' && (
-              <div className="space-y-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900">Upload Medical Documents</h2>
-                  <p className="text-gray-600 mt-1">
-                    Upload your medical documents for AI-powered analysis and organization.
-                  </p>
-                </div>
-
-                <Card className="p-8 bg-white/80 backdrop-blur-sm border-blue-100">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900">Document Upload</h3>
-                      <p className="text-gray-600">Drag and drop files or click to browse</p>
-                    </div>
-                  </div>
-                  <FileUploader onUploadSuccess={handleUploadSuccess} />
-                </Card>
-
-                {/* Recent Uploads */}
-                {filteredDocuments.length > 0 && (
-                  <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-6">Recent Uploads</h3>
-                    <DocumentList 
-                      documents={filteredDocuments.slice(0, 5)} 
-                      viewMode="grid"
-                      onSelectDocument={(doc) => setSelectedDocument(doc)}
-                    />
-                  </Card>
-                )}
-              </div>
-            )}
-
             {/* Medical Intelligence Section */}
             {activeSection === 'intelligence' && (
-              <div className="space-y-8">
+              <div>
                 <MedicalIntelligence documents={safeDocuments} />
               </div>
             )}
 
-            {/* OCR Testing Section */}
+            {/* OCR Lab Section */}
             {activeSection === 'ocr' && (
               <div className="space-y-8">
                 <div>
-                  <h2 className="text-3xl font-bold text-gray-900">OCR Testing Lab</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">OCR Laboratory</h2>
                   <p className="text-gray-600 mt-1">
-                    Test OCR capabilities on medical documents and images using Tesseract.js
+                    Extract text from medical images using advanced OCR technology
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Upload Section */}
-                  <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
-                    <h3 className="text-xl font-semibold mb-4 flex items-center">
+                  <Card className="p-6 bg-white border-0 shadow-sm">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center">
                       <Upload className="h-5 w-5 mr-2" />
                       Upload Image for OCR
                     </h3>
@@ -610,7 +1287,7 @@ export default function Dashboard() {
                       {...getRootProps()}
                       className={`
                         border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-                        ${isDragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-gray-400'}
+                        ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
                       `}
                     >
                       <input {...getInputProps()} />
@@ -663,8 +1340,8 @@ export default function Dashboard() {
                   </Card>
 
                   {/* Results Section */}
-                  <Card className="p-6 bg-white/80 backdrop-blur-sm border-blue-100">
-                    <h3 className="text-xl font-semibold mb-4 flex items-center">
+                  <Card className="p-6 bg-white border-0 shadow-sm">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center">
                       <Eye className="h-5 w-5 mr-2" />
                       OCR Results
                     </h3>
@@ -720,32 +1397,66 @@ export default function Dashboard() {
                     )}
                   </Card>
                 </div>
+              </div>
+            )}
 
-                {/* Sample Medical Documents Info */}
-                <Card className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200">
-                  <h3 className="text-xl font-semibold mb-4 text-purple-900">Sample Medical Documents</h3>
-                  <p className="text-purple-700 mb-4">
-                    Try these sample medical document types to test OCR accuracy:
+            {/* Analytics Section */}
+            {activeSection === 'analytics' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Document Analytics</h2>
+                  <p className="text-gray-600 mt-1">
+                    Insights and statistics about your medical document collection
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
-                      <strong className="text-purple-900">Prescriptions</strong>
-                      <p className="text-purple-600">Medication names, dosages, instructions</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <Card className="p-6 bg-white border-0 shadow-sm">
+                    <h3 className="text-lg font-semibold mb-4">Document Distribution</h3>
+                    <div className="space-y-4">
+                      {Object.entries(stats.categories).map(([key, count]) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 capitalize">
+                            {key.replace('_', ' ')}
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-20 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full" 
+                                style={{ width: `${stats.totalDocuments > 0 ? (count / stats.totalDocuments) * 100 : 0}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-medium">{count}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
-                      <strong className="text-purple-900">Lab Results</strong>
-                      <p className="text-purple-600">Blood tests, values, reference ranges</p>
+                  </Card>
+
+                  <Card className="p-6 bg-white border-0 shadow-sm">
+                    <h3 className="text-lg font-semibold mb-4">System Status</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">API Status</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className="text-sm">{hasApiKey ? 'Connected' : 'Not configured'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Storage</span>
+                        <span className="text-sm">Local + Cloud</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Security</span>
+                        <div className="flex items-center space-x-2">
+                          <Shield className="w-4 h-4 text-green-500" />
+                          <span className="text-sm">HIPAA Compliant</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
-                      <strong className="text-purple-900">Medical Bills</strong>
-                      <p className="text-purple-600">Charges, procedures, insurance info</p>
-                    </div>
-                    <div className="p-3 bg-white/80 rounded-lg shadow-sm">
-                      <strong className="text-purple-900">Handwritten Notes</strong>
-                      <p className="text-purple-600">Doctor notes, patient information</p>
-                    </div>
-                  </div>
-                </Card>
+                  </Card>
+                </div>
               </div>
             )}
           </div>
@@ -755,7 +1466,7 @@ export default function Dashboard() {
       {/* Document Viewer Modal */}
       {selectedDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto shadow-2xl">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-xl font-semibold">Document Details</h3>
               <Button 

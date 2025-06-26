@@ -1,60 +1,87 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { 
-  Stethoscope, 
+  User, 
   Calendar, 
+  Activity, 
+  FileText, 
   AlertTriangle, 
-  TrendingUp, 
-  Users, 
-  FileText,
+  Heart, 
+  Pill, 
+  TrendingUp,
   Clock,
+  CheckCircle,
+  XCircle,
+  Bell,
+  Download,
+  Eye,
+  Plus,
+  Users,
+  Stethoscope,
   Brain,
-  Target,
-  Activity,
-  CheckCircle
+  Search,
+  Filter,
+  MoreHorizontal,
+  ChevronRight,
+  Star,
+  Shield,
+  Edit,
+  Save,
+  X
 } from 'lucide-react'
-
-interface PatientSummary {
-  id: string
-  name: string
-  age: number
-  lastVisit: string
-  riskLevel: 'low' | 'medium' | 'high' | 'critical'
-  activeConditions: string[]
-  upcomingAppointment?: string
-  recentAlerts: string[]
-  medicationCompliance: number
-}
-
-interface ClinicalAlert {
-  id: string
-  patientId: string
-  patientName: string
-  type: 'drug_interaction' | 'abnormal_lab' | 'missed_appointment' | 'critical_value'
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  message: string
-  timestamp: string
-  actionRequired: boolean
-}
-
-interface DifferentialDiagnosis {
-  condition: string
-  probability: number
-  supportingEvidence: string[]
-  contraindications: string[]
-  recommendedTests: string[]
-}
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 
 interface Doctor {
   id: string
   name: string
   specialty: string
   department: string
-  patients: PatientSummary[]
-  alerts: ClinicalAlert[]
+  patientsAssigned: number
+  activeAlerts: number
+  completedToday: number
+  rating: number
+  status: 'available' | 'busy' | 'offline'
+  lastActive: string
+}
+
+interface Patient {
+  id: string
+  name: string
+  age: number
+  gender: string
+  assignedDoctor: string
+  condition: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  lastVisit: string
+  nextAppointment?: string
+  alerts: number
+}
+
+interface ClinicalAlert {
+  id: string
+  patientId: string
+  patientName: string
+  type: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  description: string
+  timestamp: string
+  assignedDoctor: string
+  status: 'new' | 'acknowledged' | 'resolved'
+}
+
+interface DoctorLog {
+  id: string
+  patientId: string
+  patientName: string
+  doctorId: string
+  doctorName: string
+  timestamp: string
+  type: 'assessment' | 'treatment' | 'medication' | 'observation' | 'discharge'
+  title: string
+  content: string
+  tags: string[]
 }
 
 interface DoctorDashboardProps {
@@ -62,2119 +89,1576 @@ interface DoctorDashboardProps {
 }
 
 export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('all')
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'alerts' | 'analytics' | 'logs'>('overview')
   const [doctors, setDoctors] = useState<Doctor[]>([])
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
-  const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null)
-  const [differentialDx, setDifferentialDx] = useState<DifferentialDiagnosis[]>([])
-  const [isGeneratingDx, setIsGeneratingDx] = useState(false)
-  const [reviewedAlerts, setReviewedAlerts] = useState<Set<string>>(new Set())
-  const [processingAlert, setProcessingAlert] = useState<string | null>(null)
-  const [showNewPatientDialog, setShowNewPatientDialog] = useState(false)
-  const [newPatientData, setNewPatientData] = useState({
-    name: '',
-    age: '',
-    conditions: '',
-    riskLevel: 'medium' as 'low' | 'medium' | 'high' | 'critical'
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [alerts, setAlerts] = useState<ClinicalAlert[]>([])
+  const [doctorLogs, setDoctorLogs] = useState<DoctorLog[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterPriority, setFilterPriority] = useState<string>('all')
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
+  const [showPatientModal, setShowPatientModal] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showAddLogModal, setShowAddLogModal] = useState(false)
+  const [showEditLogModal, setShowEditLogModal] = useState(false)
+  const [editingLog, setEditingLog] = useState<DoctorLog | null>(null)
+  const [newLog, setNewLog] = useState<{
+    patientId: string
+    type: DoctorLog['type']
+    title: string
+    content: string
+    tags: string[]
+  }>({
+    patientId: '',
+    type: 'assessment',
+    title: '',
+    content: '',
+    tags: []
   })
 
-  useEffect(() => {
-    loadDoctorData()
-    // Also check for real patient data from Patient Dashboard on mount
-    checkAndLoadPatientDashboardData()
-  }, [])
-
-  // Automatically extract doctors from documents when documents change
-  useEffect(() => {
-    if (documents && documents.length > 0) {
-      console.log('[Doctor Dashboard] Documents updated, checking for doctor data...')
-      extractAndUpdateDoctorsFromDocuments()
+  // Mock data initialization
+  const mockDoctors: Doctor[] = [
+    {
+      id: 'dr-smith',
+      name: 'Dr. Sarah Smith',
+      specialty: 'Endocrinology',
+      department: 'Internal Medicine',
+      patientsAssigned: 12,
+      activeAlerts: 3,
+      completedToday: 8,
+      rating: 4.8,
+      status: 'available',
+      lastActive: '2 minutes ago'
+    },
+    {
+      id: 'dr-williams',
+      name: 'Dr. Michael Williams',
+      specialty: 'Nephrology',
+      department: 'Internal Medicine',
+      patientsAssigned: 15,
+      activeAlerts: 5,
+      completedToday: 6,
+      rating: 4.9,
+      status: 'busy',
+      lastActive: '15 minutes ago'
+    },
+    {
+      id: 'dr-johnson',
+      name: 'Dr. Emily Johnson',
+      specialty: 'Cardiology',
+      department: 'Cardiovascular',
+      patientsAssigned: 18,
+      activeAlerts: 2,
+      completedToday: 10,
+      rating: 4.7,
+      status: 'available',
+      lastActive: '5 minutes ago'
     }
-  }, [documents])
+  ]
 
-  // Save doctors to localStorage whenever doctors state changes
-  useEffect(() => {
-    if (doctors.length > 0) {
-      localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(doctors))
-      if (selectedDoctor) {
-        localStorage.setItem('clinicalDashboard_selectedDoctor', JSON.stringify(selectedDoctor))
-      }
+  const mockPatients: Patient[] = [
+    {
+      id: 'patient-1',
+      name: 'Sarah Johnson',
+      age: 52,
+      gender: 'Female',
+      assignedDoctor: 'Dr. Sarah Smith',
+      condition: 'Type 2 Diabetes',
+      priority: 'high',
+      lastVisit: '2025-06-20',
+      nextAppointment: '2025-07-15',
+      alerts: 2
+    },
+    {
+      id: 'patient-2',
+      name: 'Robert Chen',
+      age: 58,
+      gender: 'Male',
+      assignedDoctor: 'Dr. Michael Williams',
+      condition: 'CKD Stage 3',
+      priority: 'critical',
+      lastVisit: '2025-06-18',
+      nextAppointment: '2025-08-20',
+      alerts: 3
+    },
+    {
+      id: 'patient-3',
+      name: 'WS DHILLON',
+      age: 65,
+      gender: 'Male',
+      assignedDoctor: 'Dr. Michael Williams',
+      condition: 'Severe Kidney Disease',
+      priority: 'critical',
+      lastVisit: '2025-06-25',
+      alerts: 4
     }
-  }, [doctors, selectedDoctor])
+  ]
 
-  // Load doctors from localStorage on component mount
-  useEffect(() => {
-    const savedDoctors = localStorage.getItem('clinicalDashboard_doctors')
-    const savedSelectedDoctor = localStorage.getItem('clinicalDashboard_selectedDoctor')
-    
-    if (savedDoctors) {
-      try {
-        const parsedDoctors = JSON.parse(savedDoctors)
-        setDoctors(parsedDoctors)
-        
-        if (savedSelectedDoctor) {
-          const parsedSelectedDoctor = JSON.parse(savedSelectedDoctor)
-          // Make sure the selected doctor still exists in the doctors array
-          const doctorExists = parsedDoctors.find((d: Doctor) => d.id === parsedSelectedDoctor.id)
-          if (doctorExists) {
-            setSelectedDoctor(doctorExists)
-          } else {
-            setSelectedDoctor(parsedDoctors[0])
-          }
-        } else {
-          setSelectedDoctor(parsedDoctors[0])
-        }
-      } catch (error) {
-        console.error('Error loading saved doctors:', error)
-        loadDoctorData() // Fallback to loading fresh data
-      }
+  const mockAlerts: ClinicalAlert[] = [
+    {
+      id: 'alert-1',
+      patientId: 'patient-3',
+      patientName: 'WS DHILLON',
+      type: 'critical',
+      title: 'Critical GFR Level',
+      description: 'GFR is 7 mL/min indicating severe kidney disease. Immediate intervention required.',
+      timestamp: '2025-06-25T10:30:00Z',
+      assignedDoctor: 'Dr. Michael Williams',
+      status: 'new'
+    },
+    {
+      id: 'alert-2',
+      patientId: 'patient-2',
+      patientName: 'Robert Chen',
+      type: 'high',
+      title: 'Elevated Creatinine',
+      description: 'Creatinine levels trending upward. Monitor closely and consider medication adjustment.',
+      timestamp: '2025-06-25T09:15:00Z',
+      assignedDoctor: 'Dr. Michael Williams',
+      status: 'acknowledged'
+    },
+    {
+      id: 'alert-3',
+      patientId: 'patient-1',
+      patientName: 'Sarah Johnson',
+      type: 'high',
+      title: 'Poor Diabetes Control',
+      description: 'HbA1c is 9.2% indicating poor diabetes control. Medication review needed.',
+      timestamp: '2025-06-25T08:45:00Z',
+      assignedDoctor: 'Dr. Sarah Smith',
+      status: 'new'
     }
-    
-    // Also check for real patient data from Patient Dashboard
-    checkAndLoadPatientDashboardData()
-  }, [])
+  ]
 
-  // Function to check for and load real patient data from Patient Dashboard
-  const checkAndLoadPatientDashboardData = () => {
-    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
-    
-    if (savedRealPatient) {
-      try {
-        const realPatient = JSON.parse(savedRealPatient)
-        console.log('[Doctor Dashboard] Found real patient data from Patient Dashboard:', realPatient)
-        
-        // Create or update doctor entry for this patient
-        createDoctorFromPatientData(realPatient)
-      } catch (error) {
-        console.error('[Doctor Dashboard] Error loading real patient data:', error)
-      }
+  // Mock Doctor Logs
+  const mockDoctorLogs: DoctorLog[] = [
+    {
+      id: 'log-1',
+      patientId: 'patient-3',
+      patientName: 'WS DHILLON',
+      doctorId: 'dr-williams',
+      doctorName: 'Dr. Michael Williams',
+      timestamp: '2025-06-25T14:30:00Z',
+      type: 'assessment',
+      title: 'Critical Kidney Function Assessment',
+      content: 'Patient presents with severe kidney dysfunction. GFR at 7 mL/min indicates end-stage renal disease. Immediate dialysis consultation required. Patient is symptomatic with fatigue, shortness of breath, and fluid retention. Family counseled on treatment options including dialysis and potential transplant evaluation.',
+      tags: ['critical', 'nephrology', 'dialysis', 'ESRD']
+    },
+    {
+      id: 'log-2',
+      patientId: 'patient-2',
+      patientName: 'Robert Chen',
+      doctorId: 'dr-williams',
+      doctorName: 'Dr. Michael Williams',
+      timestamp: '2025-06-24T11:15:00Z',
+      type: 'medication',
+      title: 'ACE Inhibitor Adjustment',
+      content: 'Increased Lisinopril from 10mg to 20mg daily due to suboptimal blood pressure control. Patient tolerated previous dose well without significant side effects. Will monitor renal function closely given CKD Stage 3. Follow-up in 2 weeks to assess response.',
+      tags: ['medication', 'hypertension', 'ACE-inhibitor', 'CKD']
+    },
+    {
+      id: 'log-3',
+      patientId: 'patient-1',
+      patientName: 'Sarah Johnson',
+      doctorId: 'dr-smith',
+      doctorName: 'Dr. Sarah Smith',
+      timestamp: '2025-06-23T09:45:00Z',
+      type: 'treatment',
+      title: 'Diabetes Management Plan Update',
+      content: 'HbA1c remains elevated at 9.2% despite current regimen. Adding Ozempic 0.25mg weekly to current Metformin therapy. Patient educated on injection technique and potential side effects. Referred to diabetes educator for comprehensive lifestyle counseling. Target HbA1c <7%.',
+      tags: ['diabetes', 'HbA1c', 'GLP-1', 'lifestyle']
+    },
+    {
+      id: 'log-4',
+      patientId: 'patient-1',
+      patientName: 'Sarah Johnson',
+      doctorId: 'dr-smith',
+      doctorName: 'Dr. Sarah Smith',
+      timestamp: '2025-06-20T16:20:00Z',
+      type: 'observation',
+      title: 'Weight Management Progress',
+      content: 'Patient has lost 3 lbs since last visit. Reports improved dietary compliance and regular exercise 3x/week. Blood pressure improved to 138/85 from previous 145/92. Encouraged to continue current lifestyle modifications. Consider reducing antihypertensive if trend continues.',
+      tags: ['weight-loss', 'lifestyle', 'blood-pressure', 'progress']
+    },
+    {
+      id: 'log-5',
+      patientId: 'patient-2',
+      patientName: 'Robert Chen',
+      doctorId: 'dr-williams',
+      doctorName: 'Dr. Michael Williams',
+      timestamp: '2025-06-18T13:10:00Z',
+      type: 'assessment',
+      title: 'CKD Progression Monitoring',
+      content: 'Creatinine trending upward from 1.6 to 1.8 mg/dL over past 3 months. GFR decreased from 50 to 45 mL/min. Patient counseled on CKD progression and importance of blood pressure control. Discussed potential need for nephrology referral if further decline.',
+      tags: ['CKD', 'progression', 'creatinine', 'monitoring']
+    },
+    {
+      id: 'log-6',
+      patientId: 'patient-3',
+      patientName: 'WS DHILLON',
+      doctorId: 'dr-williams',
+      doctorName: 'Dr. Michael Williams',
+      timestamp: '2025-06-15T10:00:00Z',
+      type: 'treatment',
+      title: 'Dialysis Access Planning',
+      content: 'Discussed dialysis access options with patient and family. Recommended AV fistula creation in non-dominant arm. Referred to vascular surgeon for evaluation. Patient understands the procedure and timeline. Will coordinate with dialysis center for education sessions.',
+      tags: ['dialysis', 'access', 'AV-fistula', 'surgery']
     }
-  }
+  ]
 
-  // Function to create doctor entry from patient data
-  const createDoctorFromPatientData = (patientData: any) => {
-    console.log('[Doctor Dashboard] Creating doctor from patient data:', patientData)
-    
-    // Determine doctor name from patient's lab results or create a default one
-    let doctorName = 'Dr. Amarjot' // Default based on your example
-    let specialty = 'Nephrology'
-    
-    // Try to extract doctor info from patient's lab results
-    if (patientData.labResults && patientData.labResults.length > 0) {
-      const orderedBy = patientData.labResults[0].orderedBy
-      if (orderedBy && orderedBy !== 'Uploaded Document') {
-        doctorName = orderedBy.startsWith('Dr.') ? orderedBy : `Dr. ${orderedBy}`
-      }
-      
-      // Infer specialty from lab types
-      const hasKidneyLabs = patientData.labResults.some((lab: any) => 
-        lab.testName.toLowerCase().includes('gfr') || 
-        lab.testName.toLowerCase().includes('creatinine')
-      )
-      if (hasKidneyLabs) {
-        specialty = 'Nephrology'
-      }
-    }
-
-    // Create patient summary for the doctor dashboard
-    const patientSummary: PatientSummary = {
-      id: `real-patient-${Date.now()}`,
-      name: patientData.name || 'Real Patient',
-      age: patientData.age || 0,
-      lastVisit: new Date().toISOString().split('T')[0],
-      riskLevel: determineRiskLevel(patientData),
-      activeConditions: patientData.conditions || [],
-      recentAlerts: [],
-      medicationCompliance: 85
-    }
-
-    console.log('[Doctor Dashboard] Created patient summary:', patientSummary)
-
-    // Generate clinical alerts from patient data
-    const clinicalAlerts = generateClinicalAlertsFromPatient(patientData, patientSummary.id, doctorName)
-    console.log('[Doctor Dashboard] Generated clinical alerts:', clinicalAlerts)
-
-    // Create or update doctor
-    const doctorId = `real-${doctorName.toLowerCase().replace(/\s+/g, '-')}`
-    
-    setDoctors(prevDoctors => {
-      const existingDoctorIndex = prevDoctors.findIndex(d => d.id === doctorId)
-      
-      if (existingDoctorIndex >= 0) {
-        // Update existing doctor
-        const updatedDoctors = [...prevDoctors]
-        const existingDoctor = updatedDoctors[existingDoctorIndex]
-        
-        // Check if patient already exists
-        const existingPatientIndex = existingDoctor.patients.findIndex(p => p.name === patientSummary.name)
-        if (existingPatientIndex >= 0) {
-          // Update existing patient
-          existingDoctor.patients[existingPatientIndex] = patientSummary
-        } else {
-          // Add new patient
-          existingDoctor.patients.push(patientSummary)
-        }
-        
-        // Update alerts (remove old alerts for this patient and add new ones)
-        existingDoctor.alerts = existingDoctor.alerts.filter(alert => alert.patientName !== patientSummary.name)
-        existingDoctor.alerts.push(...clinicalAlerts)
-        
-        console.log('[Doctor Dashboard] Updated existing doctor:', existingDoctor)
-        return updatedDoctors
-      } else {
-        // Create new doctor
-        const newDoctor: Doctor = {
-          id: doctorId,
-          name: doctorName,
-          specialty: specialty,
-          department: specialty,
-          patients: [patientSummary],
-          alerts: clinicalAlerts
-        }
-        
-        console.log('[Doctor Dashboard] Created new doctor:', newDoctor)
-        return [newDoctor, ...prevDoctors]
-      }
-    })
-
-    // Also update the selected doctor to the new/updated doctor
-    setTimeout(() => {
-      setDoctors(currentDoctors => {
-        const updatedDoctor = currentDoctors.find(d => d.id === doctorId)
-        if (updatedDoctor) {
-          setSelectedDoctor(updatedDoctor)
-          console.log('[Doctor Dashboard] Set selected doctor to:', updatedDoctor)
-        }
-        return currentDoctors
-      })
-    }, 100)
-
-    console.log(`[Doctor Dashboard] Created/updated doctor ${doctorName} with patient ${patientSummary.name} and ${clinicalAlerts.length} alerts`)
-  }
-
-  // Function to determine risk level from patient data
-  const determineRiskLevel = (patientData: any): 'low' | 'medium' | 'high' | 'critical' => {
-    if (!patientData.labResults || patientData.labResults.length === 0) {
-      return 'medium'
-    }
-
-    // Check for critical lab values
-    const hasCritical = patientData.labResults.some((lab: any) => lab.status === 'critical')
-    if (hasCritical) return 'critical'
-
-    const hasHigh = patientData.labResults.some((lab: any) => lab.status === 'high')
-    if (hasHigh) return 'high'
-
-    const hasLow = patientData.labResults.some((lab: any) => lab.status === 'low')
-    if (hasLow) return 'medium'
-
-    return 'low'
-  }
-
-  // Function to generate clinical alerts from patient data
-  const generateClinicalAlertsFromPatient = (patientData: any, patientId: string, doctorName: string): ClinicalAlert[] => {
-    const alerts: ClinicalAlert[] = []
-
-    if (patientData.labResults) {
-      patientData.labResults.forEach((lab: any, index: number) => {
-        if (lab.status === 'critical') {
-          alerts.push({
-            id: `critical-lab-${patientId}-${index}`,
-            patientId: patientId,
-            patientName: patientData.name,
-            type: 'critical_value',
-            severity: 'critical',
-            message: `Critical ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
-            timestamp: new Date().toISOString(),
-            actionRequired: true
-          })
-        } else if (lab.status === 'high') {
-          alerts.push({
-            id: `high-lab-${patientId}-${index}`,
-            patientId: patientId,
-            patientName: patientData.name,
-            type: 'abnormal_lab',
-            severity: 'high',
-            message: `Elevated ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
-            timestamp: new Date().toISOString(),
-            actionRequired: true
-          })
-        } else if (lab.status === 'low') {
-          alerts.push({
-            id: `low-lab-${patientId}-${index}`,
-            patientId: patientId,
-            patientName: patientData.name,
-            type: 'abnormal_lab',
-            severity: 'medium',
-            message: `Low ${lab.testName}: ${lab.value} (Normal: ${lab.normalRange})`,
-            timestamp: new Date().toISOString(),
-            actionRequired: true
-          })
-        }
-      })
-    }
-
-    // Add condition-specific alerts
-    if (patientData.conditions) {
-      patientData.conditions.forEach((condition: string, index: number) => {
-        if (condition.toLowerCase().includes('kidney') || condition.toLowerCase().includes('ckd')) {
-          alerts.push({
-            id: `condition-kidney-${patientId}-${index}`,
-            patientId: patientId,
-            patientName: patientData.name,
-            type: 'abnormal_lab',
-            severity: 'high',
-            message: `Patient has ${condition} - requires regular monitoring and nephrology follow-up`,
-            timestamp: new Date().toISOString(),
-            actionRequired: true
-          })
-        } else if (condition.toLowerCase().includes('diabetes')) {
-          alerts.push({
-            id: `condition-diabetes-${patientId}-${index}`,
-            patientId: patientId,
-            patientName: patientData.name,
-            type: 'abnormal_lab',
-            severity: 'medium',
-            message: `Patient has ${condition} - monitor glucose control and complications`,
-            timestamp: new Date().toISOString(),
-            actionRequired: true
-          })
-        }
-      })
-    }
-
-    return alerts
-  }
-
-  // Function to extract and update doctors from uploaded documents
-  const extractAndUpdateDoctorsFromDocuments = () => {
-    console.log(`[Doctor Dashboard] Processing ${documents.length} documents for doctor extraction...`)
-    
-    const extractedDoctors = extractDoctorsFromReports(documents)
-    
-    if (extractedDoctors.length > 0) {
-      console.log(`[Doctor Dashboard] Found ${extractedDoctors.length} doctors in documents`)
-      
-      // Merge with existing doctors, avoiding duplicates
-      setDoctors(prevDoctors => {
-        const existingDoctorNames = new Set(prevDoctors.map(d => d.name))
-        const newDoctors = extractedDoctors.filter(d => !existingDoctorNames.has(d.name))
-        
-        if (newDoctors.length > 0) {
-          console.log(`[Doctor Dashboard] Adding ${newDoctors.length} new doctors`)
-          return [...prevDoctors, ...newDoctors]
-        }
-        
-        return prevDoctors
-      })
-    }
-  }
-
-  // Function to manually load real doctor data from documents
-  const loadRealDoctorData = () => {
-    console.log('[Doctor Dashboard] Manually loading real doctor data from documents...')
+  // Load real patient data from uploaded documents
+  const loadRealPatientData = async () => {
+    console.log('[Clinical Dashboard] Loading real patient data from documents...')
     
     if (!documents || documents.length === 0) {
-      alert('❌ No documents found!\n\nPlease upload medical documents first:\n1. Go to "Upload Documents" section\n2. Upload your medical reports\n3. Then return to Clinical Dashboard\n4. Click "Load Real Doctor Data"')
+      alert('❌ No documents found!\n\nPlease upload medical documents first in the Upload section.')
       return
     }
 
-    console.log(`[Doctor Dashboard] Processing ${documents.length} documents...`)
-    
-    // Debug: Show what's in the documents
-    documents.forEach((doc, i) => {
-      console.log(`[Doctor Dashboard] Document ${i + 1}:`, {
-        name: doc.name,
-        type: doc.type,
-        hasContent: !!(doc.content),
-        hasSummary: !!(doc.summary),
-        contentLength: (doc.content || '').length,
-        summaryLength: (doc.summary || '').length,
-        contentPreview: (doc.content || doc.summary || '').substring(0, 200)
-      })
-    })
+    let foundNewPatients = false
+    const newPatients: Patient[] = []
+    const newAlerts: ClinicalAlert[] = []
 
-    const extractedDoctors = extractDoctorsFromReports(documents)
-    
-    // If no doctors found, create a fallback doctor from any patient data
-    if (extractedDoctors.length === 0) {
-      console.log('[Doctor Dashboard] No doctors found, trying fallback extraction...')
-      
-      // Try to extract any patient information and create a generic doctor
-      let foundPatientData = false
-      const fallbackDoctor: Doctor = {
-        id: 'real-doctor-from-documents',
-        name: 'Dr. Unknown (From Documents)',
-        specialty: 'Internal Medicine',
-        department: 'Internal Medicine',
-        patients: [],
-        alerts: []
-      }
+    documents.forEach((doc: any) => {
+      const content = doc.summary || doc.content || ''
+      if (!content || content.length < 50) return
 
-      documents.forEach((doc, index) => {
-        const content = doc.content || doc.summary || ''
-        if (content.length < 10) return
+      // Extract patient information
+      const nameMatch = content.match(/([A-Z]{1,3}\s+[A-Z]{2,})/i)
+      const ageMatch = content.match(/(\d{1,3})-year-old/i)
+      const genderMatch = content.match(/\b(male|female)\b/i)
 
-        console.log(`[Doctor Dashboard] Fallback: Processing document ${index + 1} content...`)
-        
-        const patientInfo = extractPatientInfo(content)
-        
-        if (patientInfo.name) {
-          console.log(`[Doctor Dashboard] Fallback: Found patient data:`, patientInfo)
-          
-          // Create patient entry
-          const patient: PatientSummary = {
-            id: `fallback-patient-${Date.now()}-${index}`,
-            name: patientInfo.name,
-            age: patientInfo.age || 0,
-            lastVisit: new Date().toISOString().split('T')[0],
-            riskLevel: inferRiskLevel(content),
-            activeConditions: extractConditions(content),
-            recentAlerts: [`Report uploaded: ${doc.name || 'Medical Report'}`],
-            medicationCompliance: 85
+      if (nameMatch) {
+        const patientName = nameMatch[1].trim()
+        const age = ageMatch ? parseInt(ageMatch[1]) : 0
+        const gender = genderMatch ? genderMatch[1] : 'Unknown'
+
+        // Determine priority based on lab values
+        let priority: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+        let condition = 'Under Investigation'
+        let assignedDoctor = 'Dr. Michael Williams'
+        let alertCount = 0
+
+        // Check for critical conditions
+        if (content.includes('GFR') && content.match(/GFR[:\s]*(\d+)/i)) {
+          const gfrMatch = content.match(/GFR[:\s]*(\d+)/i)
+          if (gfrMatch) {
+            const gfr = parseInt(gfrMatch[1])
+            if (gfr < 15) {
+              priority = 'critical'
+              condition = 'Severe Kidney Disease'
+              alertCount = 4
+            } else if (gfr < 60) {
+              priority = 'high'
+              condition = 'Chronic Kidney Disease'
+              alertCount = 2
+            }
           }
-          
-          fallbackDoctor.patients.push(patient)
-          
-          // Create alerts for abnormal findings
-          const alerts = createAlertsFromReport(doc, patientInfo.name, fallbackDoctor.id)
-          fallbackDoctor.alerts.push(...alerts)
-          
-          foundPatientData = true
         }
-      })
 
-      if (foundPatientData) {
-        console.log(`[Doctor Dashboard] Fallback: Created doctor with ${fallbackDoctor.patients.length} patients`)
-        
-        // Replace existing doctors with fallback doctor and mock doctors
-        const mockDoctors = doctors.filter(d => d.id.startsWith('dr'))
-        const allDoctors = [fallbackDoctor, ...mockDoctors]
-        setDoctors(allDoctors)
-        setSelectedDoctor(fallbackDoctor)
-        
-        // Save to localStorage
-        localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(allDoctors))
-        
-        alert(`✅ Successfully loaded patient data from documents!\n\n👨‍⚕️ Created doctor from document data\n📊 Found ${fallbackDoctor.patients.length} patients:\n${fallbackDoctor.patients.map(p => `• ${p.name} (Age: ${p.age})`).join('\n')}\n\n📋 Total alerts: ${fallbackDoctor.alerts.length}\n💾 Data saved - will persist across navigation!`)
-        return
-      }
-    }
+        if (content.includes('Creatinine') && content.match(/Creatinine[:\s]*(\d+(?:\.\d+)?)/i)) {
+          const creatMatch = content.match(/Creatinine[:\s]*(\d+(?:\.\d+)?)/i)
+          if (creatMatch) {
+            const creatinine = parseFloat(creatMatch[1])
+            if (creatinine > 3) {
+              priority = 'critical'
+              alertCount = Math.max(alertCount, 3)
+            }
+          }
+        }
 
-    if (extractedDoctors.length === 0) {
-      // Show detailed debugging info
-      console.log('[Doctor Dashboard] DEBUGGING INFO:')
-      console.log('- Documents count:', documents.length)
-      documents.forEach((doc, i) => {
-        console.log(`- Document ${i + 1}:`, {
-          name: doc.name,
-          type: doc.type,
-          hasContent: !!(doc.content),
-          hasSummary: !!(doc.summary),
-          contentLength: (doc.content || '').length,
-          summaryLength: (doc.summary || '').length,
-          keys: Object.keys(doc)
-        })
-      })
-      
-      alert('❌ No doctor or patient information found in your documents.\n\nDebugging Info:\n• Found ' + documents.length + ' documents\n• Check browser console for detailed analysis\n• Try uploading documents with clear doctor names or patient information\n• Ensure documents contain readable text content')
-      return
-    }
+        const newPatient: Patient = {
+          id: `real-patient-${Date.now()}`,
+          name: patientName,
+          age: age,
+          gender: gender.charAt(0).toUpperCase() + gender.slice(1),
+          assignedDoctor: assignedDoctor,
+          condition: condition,
+          priority: priority,
+          lastVisit: new Date().toISOString().split('T')[0],
+          alerts: alertCount
+        }
 
-    console.log(`[Doctor Dashboard] Extracted ${extractedDoctors.length} doctors from ${documents.length} documents`)
-    
-    // Replace existing doctors with extracted ones, but keep mock doctors as fallback
-    const mockDoctors = doctors.filter(d => d.id.startsWith('dr'))
-    const realDoctors = extractedDoctors
-    
-    const allDoctors = [...realDoctors, ...mockDoctors]
-    setDoctors(allDoctors)
-    
-    // Select the first real doctor
-    if (realDoctors.length > 0) {
-      setSelectedDoctor(realDoctors[0])
-    }
+        newPatients.push(newPatient)
+        foundNewPatients = true
 
-    // Save to localStorage
-    localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(allDoctors))
-    
-    alert(`✅ Successfully loaded real doctor data!\n\n👨‍⚕️ Found ${realDoctors.length} doctors:\n${realDoctors.map(d => `• ${d.name} (${d.specialty})`).join('\n')}\n\n📊 Total patients: ${realDoctors.reduce((sum, d) => sum + d.patients.length, 0)}\n📋 Total alerts: ${realDoctors.reduce((sum, d) => sum + d.alerts.length, 0)}\n\n💾 Data saved - will persist across navigation!`)
-  }
-
-  // Function to extract doctors from uploaded reports
-  const extractDoctorsFromReports = (documents: any[]): Doctor[] => {
-    const doctorMap = new Map<string, Doctor>()
-    
-    documents.forEach(doc => {
-      // Look for doctor names in the document content/summary
-      const doctorNames = extractDoctorNames(doc.content || doc.summary || '')
-      const patientInfo = extractPatientInfo(doc.content || doc.summary || '')
-      
-      doctorNames.forEach(doctorName => {
-        if (!doctorMap.has(doctorName)) {
-          // Create new doctor entry
-          doctorMap.set(doctorName, {
-            id: `real-${doctorName.toLowerCase().replace(/\s+/g, '-')}`,
-            name: doctorName,
-            specialty: inferSpecialty(doc.content || doc.summary || ''),
-            department: inferSpecialty(doc.content || doc.summary || ''),
-            patients: [],
-            alerts: []
+        // Create alerts for critical conditions
+        if (priority === 'critical') {
+          newAlerts.push({
+            id: `real-alert-${Date.now()}`,
+            patientId: newPatient.id,
+            patientName: patientName,
+            type: 'critical',
+            title: 'Critical Lab Values Detected',
+            description: `Patient ${patientName} has critical lab values requiring immediate attention.`,
+            timestamp: new Date().toISOString(),
+            assignedDoctor: assignedDoctor,
+            status: 'new'
           })
         }
-        
-        // Add patient to doctor if patient info found
-        if (patientInfo.name) {
-          const doctor = doctorMap.get(doctorName)!
-          const existingPatient = doctor.patients.find(p => p.name === patientInfo.name)
-          
-          if (!existingPatient) {
-            doctor.patients.push({
-              id: `${doctor.id}-${Date.now()}`,
-              name: patientInfo.name,
-              age: patientInfo.age || 0,
-              lastVisit: new Date().toISOString().split('T')[0],
-              riskLevel: inferRiskLevel(doc.content || doc.summary || ''),
-              activeConditions: extractConditions(doc.content || doc.summary || ''),
-              recentAlerts: [`Report uploaded: ${doc.title || 'Medical Report'}`],
-              medicationCompliance: 85
-            })
-            
-            // Create alerts for abnormal findings
-            const alerts = createAlertsFromReport(doc, patientInfo.name, doctor.id)
-            doctor.alerts.push(...alerts)
-          }
-        }
-      })
-    })
-    
-    return Array.from(doctorMap.values())
-  }
 
-  // Helper function to extract doctor names from text
-  const extractDoctorNames = (text: string): string[] => {
-    const doctorPatterns = [
-      // Standard patterns: "Dr. John Smith", "Doctor Jane Doe"
-      /Dr\.?\s+([A-Za-z\s]{3,30})(?=,|\n|$|\.)/gi,
-      /Doctor\s+([A-Za-z\s]{3,30})(?=,|\n|$|\.)/gi,
-      // Signed by patterns: "Signed by Dr. Smith", "Attending: Dr. Johnson"
-      /(?:Signed by|Attending|Physician|Provider)[:\s]*Dr\.?\s+([A-Za-z\s]{3,30})/gi,
-      // Medical signature patterns: "Dr. Smith, MD", "John Doe, MD"
-      /([A-Za-z\s]{3,30}),?\s*M\.?D\.?/gi,
-      // Report patterns: "Report by Dr. Smith", "Ordered by Dr. Johnson"
-      /(?:Report by|Ordered by|Reviewed by)[:\s]*Dr\.?\s+([A-Za-z\s]{3,30})/gi,
-      // Direct name patterns in medical context
-      /\b([A-Z][a-z]+\s+[A-Z][a-z]+),?\s*(?:MD|M\.D\.|Doctor|Physician)/gi,
-      // Simple fallback patterns
-      /Dr\.?\s+([A-Z][a-z]+)/gi,  // Just "Dr. Smith"
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s+MD/gi,  // "John Smith MD"
-      // Any name followed by medical titles
-      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*,?\s*(?:M\.D\.|MD|Doctor)/gi
-    ]
-    
-    const doctors = new Set<string>()
-    
-    console.log(`[Doctor Extraction] Processing text of length: ${text.length}`)
-    console.log(`[Doctor Extraction] Text preview: ${text.substring(0, 500)}...`)
-    
-    doctorPatterns.forEach((pattern, index) => {
-      let match
-      let matchCount = 0
-      while ((match = pattern.exec(text)) !== null) {
-        matchCount++
-        let doctorName = match[1].trim()
-        
-        // Clean up the name
-        doctorName = doctorName.replace(/[,\.]+$/, '') // Remove trailing punctuation
-        doctorName = doctorName.replace(/\s+/g, ' ') // Normalize spaces
-        
-        console.log(`[Doctor Extraction] Pattern ${index + 1} match ${matchCount}: "${doctorName}"`)
-        
-        // Validate name (reasonable length, contains letters, not common medical terms)
-        if (doctorName.length > 2 && doctorName.length < 40 && 
-            /^[A-Za-z\s]+$/.test(doctorName) &&
-            !['Blood Test', 'Lab Report', 'Medical Center', 'Test Results', 'Patient Care', 'Health System', 'Medical', 'Report', 'Test', 'Lab'].some(term => doctorName.includes(term))) {
-          
-          // Ensure it starts with Dr. if not already
-          const formattedName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`
-          doctors.add(formattedName)
-          console.log(`[Doctor Extraction] ✅ Added doctor: ${formattedName}`)
-        } else {
-          console.log(`[Doctor Extraction] ❌ Rejected: "${doctorName}" (length: ${doctorName.length}, valid chars: ${/^[A-Za-z\s]+$/.test(doctorName)})`)
-        }
+        console.log(`[Clinical Dashboard] Added patient: ${patientName} (${priority} priority)`)
       }
-      // Reset regex lastIndex
-      pattern.lastIndex = 0
-    })
-    
-    console.log(`[Doctor Extraction] Total unique doctors found: ${doctors.size}`)
-    console.log(`[Doctor Extraction] Doctors list:`, Array.from(doctors))
-    return Array.from(doctors)
-  }
-
-  // Helper function to extract patient information
-  const extractPatientInfo = (text: string) => {
-    console.log(`[Patient Extraction] Processing text of length: ${text.length}`)
-    
-    // Enhanced patient name patterns
-    const namePatterns = [
-      // Standard formats: "Patient: John Doe", "Name: Jane Smith"
-      /(?:Patient|Name|Patient Name)[:\s]*([A-Z][a-zA-Z\s]{2,30})(?:\s|,|$|\n)/i,
-      // Name followed by age/DOB: "John Doe Age 45", "Jane Smith DOB"
-      /^([A-Z][a-zA-Z\s]{2,30})\s*(?:Age|age|DOB|\d)/i,
-      // Name in medical format: "SMITH, JOHN" or "Doe, Jane"
-      /([A-Z]{2,}[,\s]+[A-Z][a-zA-Z\s]{1,20})(?:\s|,|$|\n)/i,
-      // Simple name patterns: "John Doe 45 years", "Jane Smith Male"
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+\d+|\s+(?:Male|Female|years|Age))/i,
-      // Any two capitalized words (fallback)
-      /\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/
-    ]
-    
-    // Enhanced age patterns
-    const agePatterns = [
-      /(?:Age|age)[:\s]*(\d{1,3})\s*(?:years?|yo|y\.o\.|\s|$)/i,
-      /(\d{1,3})\s*(?:years?\s*old|yo|y\.o\.)/i,
-      /DOB[:\s]*\d{1,2}[\/\-]\d{1,2}[\/\-](\d{4})/i,
-      /Age[:\s]*(\d{1,3})/i,
-      /(\d{1,3})\s*years/i
-    ]
-    
-    let patientName = null
-    let patientAge = null
-    
-    // Try to extract patient name
-    for (const pattern of namePatterns) {
-      const nameMatch = text.match(pattern)
-      if (nameMatch) {
-        let name = nameMatch[1].trim()
-        // Clean up the name (remove extra spaces, fix case)
-        name = name.replace(/\s+/g, ' ').replace(/,\s*/, ', ')
-        
-        // Validate name (reasonable length, contains letters, not common medical terms)
-        if (name.length > 3 && name.length < 50 && /[A-Za-z]/.test(name) &&
-            !['Blood Test', 'Lab Report', 'Medical Center', 'Test Results', 'Patient Care'].some(term => name.includes(term))) {
-          patientName = name
-          console.log(`[Patient Extraction] Found patient name: ${patientName}`)
-          break
-        }
-      }
-    }
-    
-    // Try to extract patient age
-    for (const pattern of agePatterns) {
-      const ageMatch = text.match(pattern)
-      if (ageMatch) {
-        let age: number
-        if (pattern.source.includes('DOB')) {
-          // Calculate age from birth year
-          const birthYear = parseInt(ageMatch[1])
-          age = new Date().getFullYear() - birthYear
-        } else {
-          age = parseInt(ageMatch[1])
-        }
-        
-        // Validate age (reasonable range)
-        if (age > 0 && age < 150) {
-          patientAge = age
-          console.log(`[Patient Extraction] Found patient age: ${patientAge}`)
-          break
-        }
-      }
-    }
-    
-    return {
-      name: patientName,
-      age: patientAge
-    }
-  }
-
-  // Helper function to infer specialty from report content
-  const inferSpecialty = (text: string): string => {
-    const specialtyKeywords = {
-      'Nephrology': ['kidney', 'GFR', 'creatinine', 'urea', 'dialysis', 'renal'],
-      'Cardiology': ['heart', 'cardiac', 'ECG', 'EKG', 'blood pressure', 'cholesterol'],
-      'Endocrinology': ['diabetes', 'HbA1c', 'glucose', 'thyroid', 'hormone'],
-      'Hematology': ['hemoglobin', 'blood count', 'anemia', 'iron', 'CBC'],
-      'Internal Medicine': ['general', 'internal', 'comprehensive']
-    }
-    
-    const lowerText = text.toLowerCase()
-    
-    for (const [specialty, keywords] of Object.entries(specialtyKeywords)) {
-      if (keywords.some(keyword => lowerText.includes(keyword))) {
-        return specialty
-      }
-    }
-    
-    return 'Internal Medicine'
-  }
-
-  // Helper function to infer risk level from report
-  const inferRiskLevel = (text: string): 'low' | 'medium' | 'high' | 'critical' => {
-    const lowerText = text.toLowerCase()
-    
-    if (lowerText.includes('critical') || lowerText.includes('severe') || 
-        lowerText.includes('GFR 7') || lowerText.includes('creatinine 8')) {
-      return 'critical'
-    }
-    
-    if (lowerText.includes('abnormal') || lowerText.includes('elevated') || 
-        lowerText.includes('low hemoglobin')) {
-      return 'high'
-    }
-    
-    if (lowerText.includes('borderline') || lowerText.includes('mild')) {
-      return 'medium'
-    }
-    
-    return 'low'
-  }
-
-  // Helper function to extract medical conditions
-  const extractConditions = (text: string): string[] => {
-    const conditions = []
-    const lowerText = text.toLowerCase()
-    
-    if (lowerText.includes('kidney') || lowerText.includes('renal') || lowerText.includes('gfr')) {
-      conditions.push('Chronic Kidney Disease')
-    }
-    if (lowerText.includes('anemia') || lowerText.includes('low hemoglobin')) {
-      conditions.push('Anemia')
-    }
-    if (lowerText.includes('diabetes') || lowerText.includes('hba1c')) {
-      conditions.push('Diabetes')
-    }
-    if (lowerText.includes('iron') && lowerText.includes('low')) {
-      conditions.push('Iron Deficiency')
-    }
-    
-    return conditions.length > 0 ? conditions : ['Under Investigation']
-  }
-
-  // Helper function to create alerts from report findings
-  const createAlertsFromReport = (doc: any, patientName: string, doctorId: string) => {
-    const alerts = []
-    const text = (doc.content || doc.summary || '').toLowerCase()
-    
-    console.log(`[Alert Generation] Processing document for ${patientName}`)
-    console.log(`[Alert Generation] Document content preview: ${text.substring(0, 300)}...`)
-    
-    // Enhanced alert detection patterns
-    
-    // 1. Kidney function alerts (GFR and Creatinine)
-    const gfrMatch = text.match(/gfr[:\s]*(\d+(?:\.\d+)?)/i)
-    if (gfrMatch) {
-      const gfrValue = parseFloat(gfrMatch[1])
-      console.log(`[Alert Generation] Found GFR: ${gfrValue}`)
-      
-      if (gfrValue < 15) {
-        alerts.push({
-          id: `${doctorId}-gfr-critical-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'critical' as const,
-          message: `Critical kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (gfrValue < 30) {
-        alerts.push({
-          id: `${doctorId}-gfr-severe-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'high' as const,
-          message: `Severe kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (gfrValue < 60) {
-        alerts.push({
-          id: `${doctorId}-gfr-moderate-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'medium' as const,
-          message: `Moderate kidney dysfunction - GFR ${gfrValue} mL/min (Normal: >90)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      }
-    }
-    
-    // 2. Creatinine alerts
-    const creatinineMatch = text.match(/creatinine[:\s]*(\d+(?:\.\d+)?)/i)
-    if (creatinineMatch) {
-      const creatinineValue = parseFloat(creatinineMatch[1])
-      console.log(`[Alert Generation] Found Creatinine: ${creatinineValue}`)
-      
-      if (creatinineValue > 5.0) {
-        alerts.push({
-          id: `${doctorId}-creatinine-critical-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'critical' as const,
-          message: `Critical creatinine level - ${creatinineValue} mg/dL (Normal: 0.6-1.2)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (creatinineValue > 2.0) {
-        alerts.push({
-          id: `${doctorId}-creatinine-high-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'high' as const,
-          message: `Elevated creatinine - ${creatinineValue} mg/dL (Normal: 0.6-1.2)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      }
-    }
-    
-    // 3. Hemoglobin alerts
-    const hemoglobinMatch = text.match(/h(?:ae)?moglobin[:\s]*(\d+(?:\.\d+)?)/i)
-    if (hemoglobinMatch) {
-      const hemoglobinValue = parseFloat(hemoglobinMatch[1])
-      console.log(`[Alert Generation] Found Hemoglobin: ${hemoglobinValue}`)
-      
-      if (hemoglobinValue < 8.0) {
-        alerts.push({
-          id: `${doctorId}-hemoglobin-critical-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'critical' as const,
-          message: `Severe anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (hemoglobinValue < 10.0) {
-        alerts.push({
-          id: `${doctorId}-hemoglobin-low-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'high' as const,
-          message: `Moderate anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (hemoglobinValue < 12.0) {
-        alerts.push({
-          id: `${doctorId}-hemoglobin-mild-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'medium' as const,
-          message: `Mild anemia - Hemoglobin ${hemoglobinValue} g/dL (Normal: 12-16)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: false
-        })
-      }
-    }
-    
-    // 4. HbA1c alerts (Diabetes)
-    const hba1cMatch = text.match(/hba1c[:\s]*(\d+(?:\.\d+)?)/i)
-    if (hba1cMatch) {
-      const hba1cValue = parseFloat(hba1cMatch[1])
-      console.log(`[Alert Generation] Found HbA1c: ${hba1cValue}`)
-      
-      if (hba1cValue > 10.0) {
-        alerts.push({
-          id: `${doctorId}-hba1c-critical-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'critical' as const,
-          message: `Severely uncontrolled diabetes - HbA1c ${hba1cValue}% (Target: <7%)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (hba1cValue > 8.0) {
-        alerts.push({
-          id: `${doctorId}-hba1c-high-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'high' as const,
-          message: `Poorly controlled diabetes - HbA1c ${hba1cValue}% (Target: <7%)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (hba1cValue > 7.0) {
-        alerts.push({
-          id: `${doctorId}-hba1c-elevated-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'medium' as const,
-          message: `Diabetes above target - HbA1c ${hba1cValue}% (Target: <7%)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: false
-        })
-      }
-    }
-    
-    // 5. Urea alerts
-    const ureaMatch = text.match(/urea[:\s]*(\d+(?:\.\d+)?)/i)
-    if (ureaMatch) {
-      const ureaValue = parseFloat(ureaMatch[1])
-      console.log(`[Alert Generation] Found Urea: ${ureaValue}`)
-      
-      if (ureaValue > 100) {
-        alerts.push({
-          id: `${doctorId}-urea-critical-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'critical_value' as const,
-          severity: 'critical' as const,
-          message: `Critically elevated urea - ${ureaValue} mg/dL (Normal: 7-20)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      } else if (ureaValue > 50) {
-        alerts.push({
-          id: `${doctorId}-urea-high-${Date.now()}`,
-          patientId: `${doctorId}-${Date.now()}`,
-          patientName,
-          type: 'abnormal_lab' as const,
-          severity: 'high' as const,
-          message: `Elevated urea - ${ureaValue} mg/dL (Normal: 7-20)`,
-          timestamp: new Date().toISOString(),
-          actionRequired: true
-        })
-      }
-    }
-    
-    // 6. General condition-based alerts
-    if (text.includes('severe') || text.includes('critical')) {
-      alerts.push({
-        id: `${doctorId}-condition-severe-${Date.now()}`,
-        patientId: `${doctorId}-${Date.now()}`,
-        patientName,
-        type: 'critical_value' as const,
-        severity: 'high' as const,
-        message: `Severe condition noted in report - requires immediate attention`,
-        timestamp: new Date().toISOString(),
-        actionRequired: true
-      })
-    }
-    
-    // 7. If no specific alerts but abnormal values mentioned
-    if (alerts.length === 0 && (text.includes('abnormal') || text.includes('elevated') || text.includes('low'))) {
-      alerts.push({
-        id: `${doctorId}-general-abnormal-${Date.now()}`,
-        patientId: `${doctorId}-${Date.now()}`,
-        patientName,
-        type: 'abnormal_lab' as const,
-        severity: 'medium' as const,
-        message: `Abnormal findings in report - review recommended`,
-        timestamp: new Date().toISOString(),
-        actionRequired: false
-      })
-    }
-    
-    console.log(`[Alert Generation] Generated ${alerts.length} alerts for ${patientName}`)
-    alerts.forEach((alert, index) => {
-      console.log(`[Alert Generation] Alert ${index + 1}: ${alert.severity} - ${alert.message}`)
-    })
-    
-    return alerts
-  }
-
-  const loadDoctorData = async () => {
-    // Check if we already have saved doctors data
-    const savedDoctors = localStorage.getItem('clinicalDashboard_doctors')
-    if (savedDoctors) {
-      // Don't reload if we already have saved data
-      return
-    }
-
-    // First, try to load doctors from uploaded reports
-    let realDoctors: Doctor[] = []
-    
-    try {
-      // Check if there are any uploaded reports with doctor information
-      const reportResponse = await fetch('/api/documents')
-      if (reportResponse.ok) {
-        const documents = await reportResponse.json()
-        
-        // Extract doctors from document summaries/metadata
-        const extractedDoctors = extractDoctorsFromReports(documents)
-        realDoctors = extractedDoctors
-      }
-    } catch (error) {
-      console.log('Could not load real doctor data, using mock data')
-    }
-
-    // Mock data - 3 doctors with their patients and reports (fallback)
-    const mockDoctors: Doctor[] = [
-      {
-        id: 'dr1',
-        name: 'Dr. Sarah Williams',
-        specialty: 'Internal Medicine',
-        department: 'Internal Medicine',
-        patients: [
-          {
-            id: '1',
-            name: 'Sarah Johnson',
-            age: 45,
-            lastVisit: '2024-01-15',
-            riskLevel: 'high',
-            activeConditions: ['Type 2 Diabetes', 'Hypertension', 'Obesity'],
-            upcomingAppointment: '2024-01-25',
-            recentAlerts: ['HbA1c elevated to 9.2%', 'Missed last 2 metformin doses'],
-            medicationCompliance: 78
-          },
-          {
-            id: '2',
-            name: 'Robert Chen',
-            age: 62,
-            lastVisit: '2024-01-18',
-            riskLevel: 'critical',
-            activeConditions: ['Atrial Fibrillation', 'Heart Failure', 'CKD Stage 3'],
-            upcomingAppointment: '2024-01-22',
-            recentAlerts: ['INR below therapeutic range', 'Creatinine trending upward'],
-            medicationCompliance: 92
-          }
-        ],
-        alerts: [
-          {
-            id: '1',
-            patientId: '1',
-            patientName: 'Sarah Johnson',
-            type: 'abnormal_lab',
-            severity: 'high',
-            message: 'HbA1c result 9.2% - significantly above target of <7%',
-            timestamp: '2024-01-21T10:30:00Z',
-            actionRequired: true
-          },
-          {
-            id: '2',
-            patientId: '2',
-            patientName: 'Robert Chen',
-            type: 'drug_interaction',
-            severity: 'critical',
-            message: 'Warfarin + New NSAID prescription - Major bleeding risk',
-            timestamp: '2024-01-21T14:15:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'dr2',
-        name: 'Dr. Michael Rodriguez',
-        specialty: 'Cardiology',
-        department: 'Cardiology',
-        patients: [
-          {
-            id: '3',
-            name: 'Emily Martinez',
-            age: 28,
-            lastVisit: '2024-01-20',
-            riskLevel: 'medium',
-            activeConditions: ['Asthma', 'Anxiety'],
-            upcomingAppointment: '2024-01-26',
-            recentAlerts: ['Peak flow readings declining'],
-            medicationCompliance: 85
-          },
-          {
-            id: '4',
-            name: 'David Thompson',
-            age: 55,
-            lastVisit: '2024-01-19',
-            riskLevel: 'high',
-            activeConditions: ['Coronary Artery Disease', 'Hyperlipidemia'],
-            upcomingAppointment: '2024-01-24',
-            recentAlerts: ['Chest pain episode reported', 'LDL cholesterol 180 mg/dL'],
-            medicationCompliance: 90
-          }
-        ],
-        alerts: [
-          {
-            id: '3',
-            patientId: '4',
-            patientName: 'David Thompson',
-            type: 'critical_value',
-            severity: 'critical',
-            message: 'Troponin elevated - possible MI',
-            timestamp: '2024-01-21T16:45:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'dr3',
-        name: 'Dr. Lisa Chen',
-        specialty: 'Endocrinology',
-        department: 'Endocrinology',
-        patients: [
-          {
-            id: '5',
-            name: 'Maria Garcia',
-            age: 38,
-            lastVisit: '2024-01-17',
-            riskLevel: 'medium',
-            activeConditions: ['Type 1 Diabetes', 'Thyroid Disorder'],
-            upcomingAppointment: '2024-01-23',
-            recentAlerts: ['Insulin pump malfunction', 'TSH levels abnormal'],
-            medicationCompliance: 95
-          },
-          {
-            id: '6',
-            name: 'James Wilson',
-            age: 42,
-            lastVisit: '2024-01-16',
-            riskLevel: 'low',
-            activeConditions: ['Prediabetes', 'Metabolic Syndrome'],
-            upcomingAppointment: '2024-01-27',
-            recentAlerts: ['Weight gain of 10 lbs'],
-            medicationCompliance: 88
-          }
-        ],
-        alerts: [
-          {
-            id: '4',
-            patientId: '5',
-            patientName: 'Maria Garcia',
-            type: 'missed_appointment',
-            severity: 'medium',
-            message: 'Missed insulin pump training session',
-            timestamp: '2024-01-20T09:00:00Z',
-            actionRequired: false
-          }
-        ]
-      }
-    ]
-
-    // Combine real doctors with mock doctors, prioritizing real doctors
-    const allDoctors = realDoctors.length > 0 ? [...realDoctors, ...mockDoctors] : mockDoctors
-    
-    setDoctors(allDoctors)
-    setSelectedDoctor(allDoctors[0]) // Default to first doctor
-  }
-
-  const handleReviewAlert = async (clinicalAlert: ClinicalAlert) => {
-    setProcessingAlert(clinicalAlert.id)
-    
-    try {
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      // Mark alert as reviewed
-      setReviewedAlerts(prev => new Set([...Array.from(prev), clinicalAlert.id]))
-      
-      // Show success message
-      alert(`✅ Alert reviewed successfully!\n\nPatient: ${clinicalAlert.patientName}\nAlert: ${clinicalAlert.message}\n\nActions taken:\n• Alert marked as reviewed\n• Workflow task created\n• Care team notified\n• Patient record updated`)
-      
-      console.log('Alert reviewed:', clinicalAlert)
-    } catch (error) {
-      alert('❌ Error reviewing alert. Please try again.')
-      console.error('Error reviewing alert:', error)
-    } finally {
-      setProcessingAlert(null)
-    }
-  }
-
-  // Function to assign doctor when scanning reports
-  const assignDoctorFromReport = (doctorName: string, patientData: any) => {
-    const updatedDoctors = doctors.map(doctor => {
-      if (doctor.name.toLowerCase().includes(doctorName.toLowerCase())) {
-        // Check if patient already exists
-        const existingPatient = doctor.patients.find(p => p.name === patientData.name)
-        if (!existingPatient) {
-          return {
-            ...doctor,
-            patients: [...doctor.patients, {
-              id: `${doctor.id}-${Date.now()}`,
-              name: patientData.name,
-              age: patientData.age || 0,
-              lastVisit: new Date().toISOString().split('T')[0],
-              riskLevel: 'medium' as const,
-              activeConditions: patientData.conditions || [],
-              recentAlerts: [`New report scanned: ${patientData.reportType}`],
-              medicationCompliance: 85
-            }]
-          }
-        }
-      }
-      return doctor
-    })
-    
-    setDoctors(updatedDoctors)
-    
-    // Show notification
-    alert(`📋 Patient ${patientData.name} assigned to ${doctorName}\n\nReport: ${patientData.reportType}\nConditions: ${patientData.conditions?.join(', ') || 'None specified'}`)
-  }
-
-  // Function to manually add doctors from your specific report
-  const addRealDoctorsFromReport = () => {
-    const reportDoctors: Doctor[] = [
-      {
-        id: 'real-dr-amarjot-kaur',
-        name: 'Dr. Amarjot Kaur',
-        specialty: 'Nephrology',
-        department: 'Nephrology',
-        patients: [
-          {
-            id: 'patient-ws-dhillon',
-            name: 'WS DHILLON',
-            age: 65,
-            lastVisit: '2025-06-25',
-            riskLevel: 'critical',
-            activeConditions: ['Chronic Kidney Disease Stage 5', 'Severe Anemia', 'Iron Deficiency'],
-            recentAlerts: [
-              'Severe kidney dysfunction - GFR 7 mL/min',
-              'Critical creatinine level - 8.05 mg/dL',
-              'Severe anemia - Hemoglobin 8.10 g/dL'
-            ],
-            medicationCompliance: 85
-          }
-        ],
-        alerts: [
-          {
-            id: 'alert-kidney-critical',
-            patientId: 'patient-ws-dhillon',
-            patientName: 'WS DHILLON',
-            type: 'critical_value',
-            severity: 'critical',
-            message: 'Severe kidney dysfunction - GFR 7 mL/min/1.73m², Creatinine 8.05 mg/dL, Urea 140.45 mg/dL',
-            timestamp: '2025-06-25T10:00:00Z',
-            actionRequired: true
-          },
-          {
-            id: 'alert-anemia-severe',
-            patientId: 'patient-ws-dhillon',
-            patientName: 'WS DHILLON',
-            type: 'abnormal_lab',
-            severity: 'critical',
-            message: 'Severe anemia - Hemoglobin 8.10 g/dL (Normal: 12-16 g/dL)',
-            timestamp: '2025-06-25T10:00:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'real-dr-pavneet-kaur',
-        name: 'Dr. Pavneet Kaur',
-        specialty: 'Hematology',
-        department: 'Hematology',
-        patients: [
-          {
-            id: 'patient-ws-dhillon-hematology',
-            name: 'WS DHILLON',
-            age: 65,
-            lastVisit: '2025-06-25',
-            riskLevel: 'high',
-            activeConditions: ['Iron Deficiency Anemia', 'Low Hemoglobin'],
-            recentAlerts: ['Iron studies abnormal', 'Blood count requires monitoring'],
-            medicationCompliance: 90
-          }
-        ],
-        alerts: [
-          {
-            id: 'alert-iron-deficiency',
-            patientId: 'patient-ws-dhillon-hematology',
-            patientName: 'WS DHILLON',
-            type: 'abnormal_lab',
-            severity: 'high',
-            message: 'Iron deficiency detected - requires iron supplementation',
-            timestamp: '2025-06-25T10:00:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'real-dr-vanni-yadav',
-        name: 'Dr. Vanni Yadav',
-        specialty: 'Internal Medicine',
-        department: 'Internal Medicine',
-        patients: [
-          {
-            id: 'patient-ws-dhillon-internal',
-            name: 'WS DHILLON',
-            age: 65,
-            lastVisit: '2025-06-25',
-            riskLevel: 'high',
-            activeConditions: ['Multiple Comorbidities', 'Comprehensive Care Required'],
-            recentAlerts: ['Complex case requiring multidisciplinary approach'],
-            medicationCompliance: 88
-          }
-        ],
-        alerts: []
-      }
-    ]
-
-    // Add these real doctors to the existing doctors list
-    const currentDoctors = doctors.filter(d => !d.id.startsWith('real-'))
-    const updatedDoctors = [...reportDoctors, ...currentDoctors]
-    
-    setDoctors(updatedDoctors)
-    setSelectedDoctor(reportDoctors[0]) // Select the first real doctor
-    
-    // Save to localStorage immediately
-    localStorage.setItem('clinicalDashboard_doctors', JSON.stringify(updatedDoctors))
-    localStorage.setItem('clinicalDashboard_selectedDoctor', JSON.stringify(reportDoctors[0]))
-    
-    // Show notification
-    alert(`✅ Successfully added real doctors from your report!\n\n👩‍⚕️ Dr. Amarjot Kaur (Nephrology)\n👩‍⚕️ Dr. Pavneet Kaur (Hematology)\n👩‍⚕️ Dr. Vanni Yadav (Internal Medicine)\n\nPatient: WS DHILLON (65 years old)\nCritical findings: Severe kidney dysfunction, Anemia\n\n💾 Data saved - will persist across navigation!`)
-  }
-
-  // Function to clear all saved data and reset to default
-  const clearAllData = () => {
-    if (confirm('⚠️ This will remove all loaded doctors and patients. Are you sure?')) {
-      localStorage.removeItem('clinicalDashboard_doctors')
-      localStorage.removeItem('clinicalDashboard_selectedDoctor')
-      setDoctors([])
-      setSelectedDoctor(null)
-      setSelectedPatient(null)
-      setDifferentialDx([])
-      setReviewedAlerts(new Set())
-      
-      // Force reload default data by calling loadDoctorData directly
-      setTimeout(() => {
-        loadDefaultDoctorData()
-      }, 100)
-      
-      alert('🗑️ All data cleared! Reloaded with default demo doctors.')
-    }
-  }
-
-  // Separate function for loading default data (without localStorage check)
-  const loadDefaultDoctorData = async () => {
-    // Mock data - 3 doctors with their patients and reports
-    const mockDoctors: Doctor[] = [
-      {
-        id: 'dr1',
-        name: 'Dr. Sarah Williams',
-        specialty: 'Internal Medicine',
-        department: 'Internal Medicine',
-        patients: [
-          {
-            id: '1',
-            name: 'Sarah Johnson',
-            age: 45,
-            lastVisit: '2024-01-15',
-            riskLevel: 'high',
-            activeConditions: ['Type 2 Diabetes', 'Hypertension', 'Obesity'],
-            upcomingAppointment: '2024-01-25',
-            recentAlerts: ['HbA1c elevated to 9.2%', 'Missed last 2 metformin doses'],
-            medicationCompliance: 78
-          },
-          {
-            id: '2',
-            name: 'Robert Chen',
-            age: 62,
-            lastVisit: '2024-01-18',
-            riskLevel: 'critical',
-            activeConditions: ['Atrial Fibrillation', 'Heart Failure', 'CKD Stage 3'],
-            upcomingAppointment: '2024-01-22',
-            recentAlerts: ['INR below therapeutic range', 'Creatinine trending upward'],
-            medicationCompliance: 92
-          }
-        ],
-        alerts: [
-          {
-            id: '1',
-            patientId: '1',
-            patientName: 'Sarah Johnson',
-            type: 'abnormal_lab',
-            severity: 'high',
-            message: 'HbA1c result 9.2% - significantly above target of <7%',
-            timestamp: '2024-01-21T10:30:00Z',
-            actionRequired: true
-          },
-          {
-            id: '2',
-            patientId: '2',
-            patientName: 'Robert Chen',
-            type: 'drug_interaction',
-            severity: 'critical',
-            message: 'Warfarin + New NSAID prescription - Major bleeding risk',
-            timestamp: '2024-01-21T14:15:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'dr2',
-        name: 'Dr. Michael Rodriguez',
-        specialty: 'Cardiology',
-        department: 'Cardiology',
-        patients: [
-          {
-            id: '3',
-            name: 'Emily Martinez',
-            age: 28,
-            lastVisit: '2024-01-20',
-            riskLevel: 'medium',
-            activeConditions: ['Asthma', 'Anxiety'],
-            upcomingAppointment: '2024-01-26',
-            recentAlerts: ['Peak flow readings declining'],
-            medicationCompliance: 85
-          },
-          {
-            id: '4',
-            name: 'David Thompson',
-            age: 55,
-            lastVisit: '2024-01-19',
-            riskLevel: 'high',
-            activeConditions: ['Coronary Artery Disease', 'Hyperlipidemia'],
-            upcomingAppointment: '2024-01-24',
-            recentAlerts: ['Chest pain episode reported', 'LDL cholesterol 180 mg/dL'],
-            medicationCompliance: 90
-          }
-        ],
-        alerts: [
-          {
-            id: '3',
-            patientId: '4',
-            patientName: 'David Thompson',
-            type: 'critical_value',
-            severity: 'critical',
-            message: 'Troponin elevated - possible MI',
-            timestamp: '2024-01-21T16:45:00Z',
-            actionRequired: true
-          }
-        ]
-      },
-      {
-        id: 'dr3',
-        name: 'Dr. Lisa Chen',
-        specialty: 'Endocrinology',
-        department: 'Endocrinology',
-        patients: [
-          {
-            id: '5',
-            name: 'Maria Garcia',
-            age: 38,
-            lastVisit: '2024-01-17',
-            riskLevel: 'medium',
-            activeConditions: ['Type 1 Diabetes', 'Thyroid Disorder'],
-            upcomingAppointment: '2024-01-23',
-            recentAlerts: ['Insulin pump malfunction', 'TSH levels abnormal'],
-            medicationCompliance: 95
-          },
-          {
-            id: '6',
-            name: 'James Wilson',
-            age: 42,
-            lastVisit: '2024-01-16',
-            riskLevel: 'low',
-            activeConditions: ['Prediabetes', 'Metabolic Syndrome'],
-            upcomingAppointment: '2024-01-27',
-            recentAlerts: ['Weight gain of 10 lbs'],
-            medicationCompliance: 88
-          }
-        ],
-        alerts: [
-          {
-            id: '4',
-            patientId: '5',
-            patientName: 'Maria Garcia',
-            type: 'missed_appointment',
-            severity: 'medium',
-            message: 'Missed insulin pump training session',
-            timestamp: '2024-01-20T09:00:00Z',
-            actionRequired: false
-          }
-        ]
-      }
-    ]
-
-    setDoctors(mockDoctors)
-    setSelectedDoctor(mockDoctors[0]) // Default to first doctor
-  }
-
-  // Example usage - this would be called when scanning a report
-  const simulateReportScan = () => {
-    const sampleReport = {
-      name: 'John Anderson',
-      age: 45,
-      reportType: 'Cardiac Stress Test',
-      conditions: ['Coronary Artery Disease'],
-      doctorMentioned: 'Dr. Michael Rodriguez'
-    }
-    
-    assignDoctorFromReport(sampleReport.doctorMentioned, sampleReport)
-  }
-
-  // Function to add a new patient to the selected doctor
-  const handleAddNewPatient = () => {
-    if (!selectedDoctor || !newPatientData.name.trim()) {
-      alert('Please select a doctor and enter patient name')
-      return
-    }
-
-    const newPatient: PatientSummary = {
-      id: `${selectedDoctor.id}-patient-${Date.now()}`,
-      name: newPatientData.name.trim(),
-      age: parseInt(newPatientData.age) || 0,
-      lastVisit: new Date().toISOString().split('T')[0],
-      riskLevel: newPatientData.riskLevel,
-      activeConditions: newPatientData.conditions 
-        ? newPatientData.conditions.split(',').map(c => c.trim()).filter(c => c)
-        : ['Initial Assessment Pending'],
-      recentAlerts: ['New patient added to system'],
-      medicationCompliance: 85
-    }
-
-    // Update the doctors array with the new patient
-    const updatedDoctors = doctors.map(doctor => {
-      if (doctor.id === selectedDoctor.id) {
-        return {
-          ...doctor,
-          patients: [...doctor.patients, newPatient]
-        }
-      }
-      return doctor
     })
 
-    setDoctors(updatedDoctors)
-    
-    // Update selected doctor
-    const updatedSelectedDoctor = updatedDoctors.find(d => d.id === selectedDoctor.id)
-    if (updatedSelectedDoctor) {
-      setSelectedDoctor(updatedSelectedDoctor)
-    }
-
-    // Reset form and close dialog
-    setNewPatientData({
-      name: '',
-      age: '',
-      conditions: '',
-      riskLevel: 'medium'
-    })
-    setShowNewPatientDialog(false)
-
-    // Show success message
-    alert(`✅ Successfully added new patient!\n\nPatient: ${newPatient.name}\nAge: ${newPatient.age}\nAssigned to: ${selectedDoctor.name}\nRisk Level: ${newPatient.riskLevel.toUpperCase()}`)
-  }
-
-  const generateDifferentialDiagnosis = async (patient: PatientSummary) => {
-    setIsGeneratingDx(true)
-    
-    try {
-      // In production, this would call the medical intelligence API
-      const response = await fetch('/api/medical-intelligence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'differential_diagnosis',
-          patientData: {
-            id: patient.id,
-            conditions: patient.activeConditions,
-            medications: [], // Would get from EMR
-            recentAlerts: patient.recentAlerts,
-            age: patient.age,
-            gender: patient.name.includes('Sarah') ? 'female' : 'male'
-          }
-        })
-      })
+    if (foundNewPatients) {
+      setPatients(prev => [...mockPatients, ...newPatients])
+      setAlerts(prev => [...mockAlerts, ...newAlerts])
       
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.differentials) {
-          setDifferentialDx(data.differentials)
-          setIsGeneratingDx(false)
-          return
-        }
-      }
-    } catch (error) {
-      console.error('Error generating differential diagnosis:', error)
-    }
-    
-    // Fallback to mock data if API fails
-    setTimeout(() => {
-      const mockDifferentials: DifferentialDiagnosis[] = [
-        {
-          condition: 'Diabetic Ketoacidosis',
-          probability: 85,
-          supportingEvidence: [
-            'HbA1c 9.2% indicates poor glycemic control',
-            'Recent medication non-compliance',
-            'Type 2 diabetes with obesity'
-          ],
-          contraindications: ['No reported ketones yet'],
-          recommendedTests: ['Serum ketones', 'Arterial blood gas', 'Basic metabolic panel']
-        },
-        {
-          condition: 'Medication Non-Adherence Syndrome',
-          probability: 92,
-          supportingEvidence: [
-            'Missed metformin doses documented',
-            'Compliance rate only 78%',
-            'HbA1c elevation pattern'
-          ],
-          contraindications: [],
-          recommendedTests: ['Medication adherence assessment', 'Pharmacy refill history']
-        },
-        {
-          condition: 'Secondary Diabetes Complications',
-          probability: 70,
-          supportingEvidence: [
-            'Long-standing diabetes',
-            'Multiple comorbidities',
-            'Poor glycemic control'
-          ],
-          contraindications: [],
-          recommendedTests: ['Diabetic retinal exam', 'Microalbumin', 'Foot examination']
-        }
-      ]
-      
-      setDifferentialDx(mockDifferentials)
-      setIsGeneratingDx(false)
-    }, 2000)
-  }
+      // Save to localStorage
+      localStorage.setItem('clinicalDashboard_realPatients', JSON.stringify(newPatients))
+      localStorage.setItem('clinicalDashboard_realAlerts', JSON.stringify(newAlerts))
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'critical': return 'text-red-600 bg-red-50 border-red-200'
-      case 'high': return 'text-orange-600 bg-orange-50 border-orange-200'
-      case 'medium': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      default: return 'text-green-600 bg-green-50 border-green-200'
-    }
-  }
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'text-red-600'
-      case 'high': return 'text-orange-600'
-      case 'medium': return 'text-yellow-600'
-      default: return 'text-blue-600'
-    }
-  }
-
-  // Function to manually refresh doctor data from Patient Dashboard
-  const refreshFromPatientDashboard = () => {
-    console.log('[Doctor Dashboard] Manually refreshing from Patient Dashboard data...')
-    
-    // Debug: Check what's in localStorage
-    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
-    console.log('[Doctor Dashboard] Raw localStorage data:', savedRealPatient)
-    
-    if (savedRealPatient) {
-      try {
-        const realPatient = JSON.parse(savedRealPatient)
-        console.log('[Doctor Dashboard] Parsed patient data:', realPatient)
-        console.log('[Doctor Dashboard] Patient lab results:', realPatient.labResults)
-        console.log('[Doctor Dashboard] Patient conditions:', realPatient.conditions)
-        
-        // Create or update doctor entry for this patient
-        createDoctorFromPatientData(realPatient)
-        
-        alert(`✅ Successfully synced patient data from Patient Dashboard!\n\n👤 Patient: ${realPatient.name}\n📊 Lab Results: ${realPatient.labResults?.length || 0}\n🏥 Conditions: ${realPatient.conditions?.length || 0}\n\n🔄 Doctor dashboard updated with alerts!`)
-      } catch (error) {
-        console.error('[Doctor Dashboard] Error parsing patient data:', error)
-        alert(`❌ Error parsing patient data: ${error}`)
-      }
+      alert(`✅ Successfully loaded ${newPatients.length} real patient(s)!\n\n${newPatients.map(p => `👤 ${p.name} (${p.priority} priority)`).join('\n')}\n\n🚨 ${newAlerts.length} clinical alert(s) generated`)
     } else {
-      // Check if there are any patients with real data in current doctors
-      const hasRealPatients = doctors.some(doctor => 
-        doctor.patients.some(patient => patient.id.includes('real'))
-      )
-      
-      if (hasRealPatients) {
-        alert('ℹ️ Real patient data already loaded in Clinical Dashboard.\n\nIf you want to refresh:\n1. Go to Patient Dashboard\n2. Click "Load Your Real Patient Data" again\n3. Return here and click "Sync Patient Data"')
-      } else {
-        alert('ℹ️ No real patient data found in Patient Dashboard.\n\nTo sync data:\n1. Go to Patient Dashboard\n2. Click "Load Your Real Patient Data"\n3. Return to Clinical Dashboard\n4. Click "Sync Patient Data"')
-      }
+      alert('❌ No patient data could be extracted from the uploaded documents.')
     }
   }
 
-  // Function to debug the current state
-  const debugCurrentState = () => {
-    console.log('=== CLINICAL DASHBOARD DEBUG ===')
-    console.log('Current doctors:', doctors)
-    console.log('Selected doctor:', selectedDoctor)
-    console.log('Documents received:', documents)
-    
-    // Check localStorage data
-    const savedRealPatient = localStorage.getItem('patientDashboard_realPatient')
-    const savedDoctors = localStorage.getItem('clinicalDashboard_doctors')
-    
-    console.log('Patient Dashboard localStorage:', savedRealPatient)
-    console.log('Clinical Dashboard localStorage:', savedDoctors)
-    
-    if (savedRealPatient) {
+  // Load saved data on mount
+  useEffect(() => {
+    setDoctors(mockDoctors)
+    setPatients(mockPatients)
+    setAlerts(mockAlerts)
+    setDoctorLogs(mockDoctorLogs) // Load mock doctor logs
+
+    // Load saved doctor logs
+    const savedLogs = localStorage.getItem('clinicalDashboard_doctorLogs')
+    if (savedLogs) {
       try {
-        const realPatient = JSON.parse(savedRealPatient)
-        console.log('Parsed real patient:', realPatient)
-        
-        // Check if this patient should generate alerts
-        const testAlerts = generateClinicalAlertsFromPatient(realPatient, 'test-id', 'Dr. Test')
-        console.log('Test alerts for this patient:', testAlerts)
+        const logs = JSON.parse(savedLogs)
+        setDoctorLogs(prev => [...logs, ...prev]) // Merge saved logs with mock logs
       } catch (error) {
-        console.error('Error parsing real patient data:', error)
+        console.error('Error loading doctor logs:', error)
+      }
+    }
+
+    // Load any saved real patient data
+    const savedPatients = localStorage.getItem('clinicalDashboard_realPatients')
+    const savedAlerts = localStorage.getItem('clinicalDashboard_realAlerts')
+    
+    if (savedPatients) {
+      try {
+        const realPatients = JSON.parse(savedPatients)
+        setPatients(prev => [...prev, ...realPatients])
+      } catch (error) {
+        console.error('Error loading saved patients:', error)
       }
     }
     
-    alert(`🔍 Debug info logged to console.\n\nCurrent state:\n• Doctors: ${doctors.length}\n• Selected: ${selectedDoctor?.name || 'None'}\n• Alerts: ${selectedDoctor?.alerts.length || 0}\n\nCheck browser console for detailed logs.`)
+    if (savedAlerts) {
+      try {
+        const realAlerts = JSON.parse(savedAlerts)
+        setAlerts(prev => [...prev, ...realAlerts])
+      } catch (error) {
+        console.error('Error loading saved alerts:', error)
+      }
+    }
+  }, [])
+
+  const filteredPatients = patients.filter(patient => {
+    const matchesSearch = patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         patient.condition.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesFilter = filterPriority === 'all' || patient.priority === filterPriority
+    const matchesDoctor = selectedDoctor === 'all' || patient.assignedDoctor.includes(selectedDoctor)
+    
+    return matchesSearch && matchesFilter && matchesDoctor
+  })
+
+  const filteredAlerts = alerts.filter(alert => {
+    const matchesDoctor = selectedDoctor === 'all' || alert.assignedDoctor.includes(selectedDoctor)
+    return matchesDoctor
+  })
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return 'bg-green-500'
+      case 'busy': return 'bg-yellow-500'
+      case 'offline': return 'bg-gray-500'
+      default: return 'bg-gray-500'
+    }
+  }
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'critical': return 'bg-red-500 text-white'
+      case 'high': return 'bg-orange-500 text-white'
+      case 'medium': return 'bg-yellow-500 text-white'
+      case 'low': return 'bg-green-500 text-white'
+      default: return 'bg-gray-500 text-white'
+    }
+  }
+
+  const getAlertColor = (type: string) => {
+    switch (type) {
+      case 'critical': return 'border-red-500 bg-red-50'
+      case 'high': return 'border-orange-500 bg-orange-50'
+      case 'medium': return 'border-yellow-500 bg-yellow-50'
+      case 'low': return 'border-blue-500 bg-blue-50'
+      default: return 'border-gray-500 bg-gray-50'
+    }
+  }
+
+  const handleViewPatient = (patient: Patient) => {
+    setSelectedPatient(patient)
+    setShowPatientModal(true)
+  }
+
+  const handleReviewAlert = async (alertId: string) => {
+    try {
+      setAlerts(prev => prev.map(alert => 
+        alert.id === alertId 
+          ? { ...alert, status: 'acknowledged' as const }
+          : alert
+      ))
+      
+      // Save to localStorage
+      const updatedAlerts = alerts.map(alert => 
+        alert.id === alertId 
+          ? { ...alert, status: 'acknowledged' as const }
+          : alert
+      )
+      localStorage.setItem('clinicalDashboard_alerts', JSON.stringify(updatedAlerts))
+      
+      console.log(`Alert ${alertId} reviewed and acknowledged`)
+    } catch (error) {
+      console.error('Error reviewing alert:', error)
+    }
+  }
+
+  const handleAddDoctorLog = () => {
+    if (!newLog.patientId || !newLog.title || !newLog.content) {
+      alert('Please fill in all required fields')
+      return
+    }
+
+    const patient = patients.find(p => p.id === newLog.patientId)
+    if (!patient) {
+      alert('Patient not found')
+      return
+    }
+
+    const log: DoctorLog = {
+      id: `log-${Date.now()}`,
+      patientId: newLog.patientId,
+      patientName: patient.name,
+      doctorId: 'dr-current',
+      doctorName: 'Dr. Sarah Wilson',
+      timestamp: new Date().toISOString(),
+      type: newLog.type,
+      title: newLog.title,
+      content: newLog.content,
+      tags: newLog.tags
+    }
+
+    setDoctorLogs(prev => [log, ...prev])
+    
+    // Save to localStorage
+    const updatedLogs = [log, ...doctorLogs]
+    localStorage.setItem('clinicalDashboard_doctorLogs', JSON.stringify(updatedLogs))
+
+    // Reset form
+    setNewLog({
+      patientId: '',
+      type: 'assessment',
+      title: '',
+      content: '',
+      tags: []
+    })
+    setShowAddLogModal(false)
+
+    alert('✅ Doctor log added successfully!')
+  }
+
+  const addTag = (tag: string) => {
+    if (tag && !newLog.tags.includes(tag)) {
+      setNewLog(prev => ({
+        ...prev,
+        tags: [...prev.tags, tag]
+      }))
+    }
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setNewLog(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }))
+  }
+
+  // Auto-generate logs from uploaded documents
+  const generateDoctorLogsFromDocuments = async () => {
+    console.log('[Doctor Logs] Generating logs from uploaded documents...')
+    
+    if (!documents || documents.length === 0) {
+      alert('❌ No documents found!\n\nPlease upload medical documents first.')
+      return
+    }
+
+    const newLogs: DoctorLog[] = []
+    const currentTime = new Date().toISOString()
+
+    documents.forEach((doc: any, index: number) => {
+      const content = doc.summary || doc.content || doc.name || ''
+      if (!content || content.length < 20) return
+
+      // Extract patient name
+      const namePatterns = [
+        /(?:Patient|Name)[:\s]*([A-Z][a-zA-Z\s]{2,30})(?:\s|,|$|\n)/i,
+        /([A-Z][a-zA-Z\s]{2,30})\s*(?:Age|age|\d)/i,
+        /([A-Z]{2,}[,\s]+[A-Z][a-zA-Z\s]{1,20})/i
+      ]
+
+      let patientName = 'Unknown Patient'
+      for (const pattern of namePatterns) {
+        const match = content.match(pattern)
+        if (match) {
+          patientName = match[1].trim().replace(/\s+/g, ' ')
+          if (patientName.length > 3 && patientName.length < 50) break
+        }
+      }
+
+      // Determine doctor based on document content
+      let assignedDoctor = 'Dr. Sarah Wilson'
+      let doctorId = 'dr-wilson'
+      
+      if (content.toLowerCase().includes('kidney') || content.toLowerCase().includes('nephro') || content.toLowerCase().includes('creatinine') || content.toLowerCase().includes('gfr')) {
+        assignedDoctor = 'Dr. Michael Williams'
+        doctorId = 'dr-williams'
+      } else if (content.toLowerCase().includes('diabetes') || content.toLowerCase().includes('endocrin') || content.toLowerCase().includes('hba1c')) {
+        assignedDoctor = 'Dr. Sarah Smith'
+        doctorId = 'dr-smith'
+      } else if (content.toLowerCase().includes('heart') || content.toLowerCase().includes('cardio') || content.toLowerCase().includes('blood pressure')) {
+        assignedDoctor = 'Dr. Emily Johnson'
+        doctorId = 'dr-johnson'
+      }
+
+      // Generate log based on document content
+      let logType: DoctorLog['type'] = 'assessment'
+      let title = 'Document Review and Assessment'
+      let logContent = `Reviewed uploaded document: ${doc.name}. `
+      const tags: string[] = ['document-review']
+
+      // Analyze content for specific conditions
+      if (content.includes('GFR') || content.includes('creatinine')) {
+        logType = 'assessment'
+        title = 'Kidney Function Assessment'
+        logContent += 'Laboratory results indicate kidney function abnormalities requiring monitoring and potential intervention. '
+        tags.push('nephrology', 'lab-results')
+        
+        const gfrMatch = content.match(/GFR[:\s]*(\d+)/i)
+        const creatMatch = content.match(/creatinine[:\s]*(\d+(?:\.\d+)?)/i)
+        
+        if (gfrMatch) {
+          const gfr = parseInt(gfrMatch[1])
+          if (gfr < 15) {
+            logContent += `Critical GFR level of ${gfr} mL/min indicates end-stage renal disease. Immediate nephrology consultation and dialysis evaluation required.`
+            tags.push('critical', 'dialysis')
+          } else if (gfr < 60) {
+            logContent += `GFR of ${gfr} mL/min indicates chronic kidney disease. Monitor progression and optimize medical management.`
+            tags.push('CKD')
+          }
+        }
+        
+        if (creatMatch) {
+          const creat = parseFloat(creatMatch[1])
+          if (creat > 3) {
+            logContent += ` Elevated creatinine at ${creat} mg/dL requires immediate attention.`
+            tags.push('elevated-creatinine')
+          }
+        }
+      }
+
+      if (content.includes('HbA1c') || content.includes('diabetes')) {
+        logType = 'treatment'
+        title = 'Diabetes Management Review'
+        logContent += 'Diabetes monitoring results reviewed. '
+        tags.push('diabetes', 'endocrinology')
+        
+        const hba1cMatch = content.match(/HbA1c[:\s]*(\d+(?:\.\d+)?)/i)
+        if (hba1cMatch) {
+          const hba1c = parseFloat(hba1cMatch[1])
+          if (hba1c > 9) {
+            logContent += `HbA1c of ${hba1c}% indicates poor glycemic control. Medication adjustment and lifestyle intervention required.`
+            tags.push('poor-control', 'medication-adjustment')
+          } else if (hba1c > 7) {
+            logContent += `HbA1c of ${hba1c}% is above target. Consider treatment optimization.`
+            tags.push('above-target')
+          }
+        }
+      }
+
+      if (content.includes('prescription') || content.includes('medication')) {
+        logType = 'medication'
+        title = 'Medication Review'
+        logContent += 'Prescription and medication history reviewed for compliance and effectiveness.'
+        tags.push('medication', 'prescription')
+      }
+
+      // Create the log entry
+      const log: DoctorLog = {
+        id: `auto-log-${Date.now()}-${index}`,
+        patientId: `real-patient-${patientName.replace(/\s+/g, '-').toLowerCase()}`,
+        patientName: patientName,
+        doctorId: doctorId,
+        doctorName: assignedDoctor,
+        timestamp: new Date(Date.now() - (index * 60000)).toISOString(), // Stagger timestamps
+        type: logType,
+        title: title,
+        content: logContent,
+        tags: tags
+      }
+
+      newLogs.push(log)
+      console.log(`[Doctor Logs] Generated log for ${patientName} by ${assignedDoctor}`)
+    })
+
+    if (newLogs.length > 0) {
+      setDoctorLogs(prev => [...newLogs, ...prev])
+      
+      // Save to localStorage
+      const allLogs = [...newLogs, ...doctorLogs]
+      localStorage.setItem('clinicalDashboard_doctorLogs', JSON.stringify(allLogs))
+
+      alert(`✅ Generated ${newLogs.length} doctor log(s) from uploaded documents!\n\n${newLogs.map(log => `📝 ${log.title} - ${log.patientName} (${log.doctorName})`).join('\n')}`)
+    } else {
+      alert('❌ No suitable content found in documents for log generation.')
+    }
+  }
+
+  const handleEditLog = (log: DoctorLog) => {
+    setEditingLog(log)
+    setNewLog({
+      patientId: log.patientId,
+      type: log.type,
+      title: log.title,
+      content: log.content,
+      tags: log.tags
+    })
+    setShowEditLogModal(true)
+  }
+
+  const handleUpdateLog = () => {
+    if (!editingLog || !newLog.title || !newLog.content) {
+      alert('Please fill in all required fields')
+      return
+    }
+
+    const updatedLog: DoctorLog = {
+      ...editingLog,
+      type: newLog.type,
+      title: newLog.title,
+      content: newLog.content,
+      tags: newLog.tags,
+      timestamp: new Date().toISOString() // Update timestamp when edited
+    }
+
+    setDoctorLogs(prev => prev.map(log => 
+      log.id === editingLog.id ? updatedLog : log
+    ))
+
+    // Save to localStorage
+    const updatedLogs = doctorLogs.map(log => 
+      log.id === editingLog.id ? updatedLog : log
+    )
+    localStorage.setItem('clinicalDashboard_doctorLogs', JSON.stringify(updatedLogs))
+
+    // Reset form
+    setNewLog({
+      patientId: '',
+      type: 'assessment',
+      title: '',
+      content: '',
+      tags: []
+    })
+    setEditingLog(null)
+    setShowEditLogModal(false)
+
+    alert('✅ Doctor log updated successfully!')
+  }
+
+  const handleDeleteLog = (logId: string) => {
+    if (confirm('Are you sure you want to delete this log entry?')) {
+      setDoctorLogs(prev => prev.filter(log => log.id !== logId))
+      
+      // Save to localStorage
+      const updatedLogs = doctorLogs.filter(log => log.id !== logId)
+      localStorage.setItem('clinicalDashboard_doctorLogs', JSON.stringify(updatedLogs))
+      
+      alert('✅ Doctor log deleted successfully!')
+    }
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-      {/* Doctor Selector */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-3">Select Doctor</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {doctors.map((doctor) => (
-            <div
-              key={doctor.id}
-              onClick={() => setSelectedDoctor(doctor)}
-              className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                selectedDoctor?.id === doctor.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+    <div className="space-y-6">
+      {/* Professional Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+            <Stethoscope className="h-7 w-7 mr-3 text-blue-600" />
+            Clinical Dashboard
+          </h2>
+          <p className="text-gray-600 mt-1">
+            Comprehensive clinical workflow management and patient monitoring
+          </p>
+        </div>
+        <div className="flex items-center space-x-3">
+          {/* Notification Button */}
+          <div className="relative">
+            <Button 
+              variant="outline"
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative"
             >
-              <h3 className="font-semibold text-gray-900">{doctor.name}</h3>
-              <p className="text-sm text-gray-600">{doctor.specialty}</p>
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-blue-600">{doctor.patients.length} patients</span>
-                <span className="text-red-600">{doctor.alerts.filter(a => a.actionRequired).length} alerts</span>
+              <Bell className="h-4 w-4 mr-2" />
+              Notifications
+              {alerts.filter(a => a.status === 'new').length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                  {alerts.filter(a => a.status === 'new').length}
+                </span>
+              )}
+            </Button>
+            
+            {/* Notification Panel */}
+            {showNotifications && (
+              <div className="absolute right-0 top-12 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Clinical Notifications</h3>
+                    <Button variant="ghost" size="sm" onClick={() => setShowNotifications(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {alerts.filter(a => a.status === 'new').length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                      <p>No new notifications</p>
+                    </div>
+                  ) : (
+                    alerts.filter(a => a.status === 'new').map((alert) => (
+                      <div key={alert.id} className="p-4 border-b border-gray-100 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{alert.title}</h4>
+                            <p className="text-sm text-gray-600 mt-1">{alert.description}</p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              {alert.patientName} • {new Date(alert.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleReviewAlert(alert.id)}
+                          >
+                            Review
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )}
+          </div>
+
+          <Button 
+            onClick={loadRealPatientData}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Load Real Patient Data
+          </Button>
+          <Button variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export Report
+          </Button>
         </div>
       </div>
 
-      {selectedDoctor && (
-        <>
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Clinical Dashboard</h1>
-              <p className="text-gray-600">{selectedDoctor.name} • {selectedDoctor.specialty}</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm">
-                <Calendar className="h-4 w-4 mr-2" />
-                Today's Schedule
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setShowNewPatientDialog(true)}
-                disabled={!selectedDoctor}
-              >
-                <Stethoscope className="h-4 w-4 mr-2" />
-                New Patient
-              </Button>
-              <Button 
-                variant="secondary" 
-                size="sm"
-                onClick={simulateReportScan}
-              >
-                📋 Demo: Scan Report
-              </Button>
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={loadRealDoctorData}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                🏥 Load Your Real Doctors
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={clearAllData}
-                className="text-red-600 border-red-300 hover:bg-red-50"
-              >
-                🗑️ Clear Data
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={refreshFromPatientDashboard}
-                className="text-blue-600 border-blue-300 hover:bg-blue-50"
-              >
-                🔄 Sync Patient Data
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={debugCurrentState}
-                className="text-gray-600 border-gray-300 hover:bg-gray-50"
-              >
-                🔍 Debug State
-              </Button>
-            </div>
+      {/* Doctor Selection & Quick Stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <Card className="lg:col-span-1 p-4 bg-white border-0 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-4">Select Doctor</h3>
+          <select 
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            value={selectedDoctor}
+            onChange={(e) => setSelectedDoctor(e.target.value)}
+          >
+            <option value="all">All Doctors</option>
+            {doctors.map((doctor) => (
+              <option key={doctor.id} value={doctor.name}>
+                {doctor.name}
+              </option>
+            ))}
+          </select>
+          
+          <div className="mt-4 space-y-3">
+            {doctors.slice(0, 3).map((doctor) => (
+              <div key={doctor.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(doctor.status)}`} />
+                  <span className="text-sm font-medium">{doctor.name}</span>
+                </div>
+                <span className="text-xs text-gray-500">{doctor.patientsAssigned} patients</span>
+              </div>
+            ))}
           </div>
+        </Card>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Active Patients</p>
-                  <p className="text-2xl font-bold text-blue-600">{selectedDoctor.patients.length}</p>
-                </div>
-                <Users className="h-8 w-8 text-blue-600" />
+        {/* Quick Stats */}
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="p-4 bg-white border-0 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Patients</p>
+                <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
+                <p className="text-xs text-blue-600">↗ Active cases</p>
               </div>
-            </Card>
-            
-            <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Critical Alerts</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {selectedDoctor.alerts.filter(a => a.severity === 'critical').length}
-                  </p>
-                </div>
-                <AlertTriangle className="h-8 w-8 text-red-600" />
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <Users className="h-6 w-6 text-blue-600" />
               </div>
-            </Card>
-            
-            <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Today's Appointments</p>
-                  <p className="text-2xl font-bold text-green-600">8</p>
-                </div>
-                <Clock className="h-8 w-8 text-green-600" />
-              </div>
-            </Card>
-            
-            <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Avg. Compliance</p>
-                  <p className="text-2xl font-bold text-purple-600">85%</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-purple-600" />
-              </div>
-            </Card>
-          </div>
+            </div>
+          </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Critical Alerts */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
-                Critical Alerts
-              </h3>
-              <div className="space-y-3">
-                {selectedDoctor.alerts.filter(alert => alert.actionRequired).map((alert) => (
-                  <div key={alert.id} className={`p-3 border rounded-lg transition-all ${
-                    reviewedAlerts.has(alert.id) 
-                      ? 'border-green-200 bg-green-50' 
-                      : 'border-red-200 bg-red-50'
-                  }`}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className={`font-medium ${
-                            reviewedAlerts.has(alert.id) ? 'text-green-900' : 'text-red-900'
-                          }`}>
-                            {alert.patientName}
-                          </p>
-                          {reviewedAlerts.has(alert.id) && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              ✓ Reviewed
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-sm mt-1 ${
-                          reviewedAlerts.has(alert.id) ? 'text-green-700' : 'text-red-700'
-                        }`}>
-                          {alert.message}
-                        </p>
-                        <p className={`text-xs mt-2 ${
-                          reviewedAlerts.has(alert.id) ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(alert.severity)}`}>
-                        {alert.severity.toUpperCase()}
-                      </span>
+          <Card className="p-4 bg-white border-0 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Critical Alerts</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {alerts.filter(a => a.type === 'critical').length}
+                </p>
+                <p className="text-xs text-red-600">↗ Needs attention</p>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-white border-0 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Doctors</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {doctors.filter(d => d.status === 'available').length}
+                </p>
+                <p className="text-xs text-green-600">↗ Available now</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg">
+                <Stethoscope className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+        {[
+          { id: 'overview', label: 'Overview', icon: Activity },
+          { id: 'patients', label: 'Patient Management', icon: Users },
+          { id: 'alerts', label: 'Clinical Alerts', icon: Bell },
+          { id: 'logs', label: 'Doctor Logs', icon: FileText },
+          { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+        ].map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-t-lg transition-colors font-medium ${
+                activeTab === tab.id
+                  ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Doctor Performance Cards */}
+          <Card className="p-6 bg-white border-0 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Doctor Performance Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {doctors.map((doctor) => (
+                <div key={doctor.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-3 h-3 rounded-full ${getStatusColor(doctor.status)}`} />
+                      <h4 className="font-semibold text-gray-900">{doctor.name}</h4>
                     </div>
-                    <Button 
-                      size="sm" 
-                      className="mt-3 w-full" 
-                      variant={reviewedAlerts.has(alert.id) ? "secondary" : "outline"}
-                      onClick={() => handleReviewAlert(alert)}
-                      disabled={processingAlert === alert.id || reviewedAlerts.has(alert.id)}
-                    >
-                      {processingAlert === alert.id ? (
-                        <>
-                          <Activity className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : reviewedAlerts.has(alert.id) ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Reviewed
-                        </>
-                      ) : (
-                        'Review & Action'
-                      )}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Active Patients */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Users className="h-5 w-5 mr-2 text-blue-600" />
-                High-Risk Patients
-              </h3>
-              <div className="space-y-3">
-                {selectedDoctor.patients
-                  .filter(p => p.riskLevel === 'high' || p.riskLevel === 'critical')
-                  .map((patient) => (
-                  <div 
-                    key={patient.id} 
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${getRiskColor(patient.riskLevel)}`}
-                    onClick={() => setSelectedPatient(patient)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-medium">{patient.name}</p>
-                        <p className="text-sm opacity-75">Age {patient.age} • Last visit: {patient.lastVisit}</p>
-                        <div className="mt-2">
-                          {patient.activeConditions.slice(0, 2).map((condition, idx) => (
-                            <span key={idx} className="inline-block text-xs bg-white bg-opacity-50 px-2 py-1 rounded mr-1 mb-1">
-                              {condition}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <span className="text-xs font-medium">
-                        {patient.riskLevel.toUpperCase()}
-                      </span>
-                    </div>
-                    {patient.recentAlerts.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-current border-opacity-20">
-                        <p className="text-xs">
-                          🚨 {patient.recentAlerts[0]}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Differential Diagnosis */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Brain className="h-5 w-5 mr-2 text-purple-600" />
-                AI Differential Diagnosis
-              </h3>
-              
-              {!selectedPatient ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Target className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="font-medium mb-2">Select a Patient for AI Analysis</p>
-                  <p className="text-sm">Click on a patient from the "High-Risk Patients" section to generate differential diagnosis</p>
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-700">
-                      💡 <strong>Tip:</strong> The AI will analyze patient conditions, recent alerts, and medical history to generate evidence-based differential diagnoses with confidence scoring.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="font-medium text-blue-900">{selectedPatient.name}</p>
-                    <p className="text-sm text-blue-700">
-                      {selectedPatient.activeConditions.join(', ')}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {selectedPatient.recentAlerts.map((alert, idx) => (
-                        <span key={idx} className="inline-block text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                          🚨 {alert}
-                        </span>
-                      ))}
+                    <div className="flex items-center space-x-1">
+                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                      <span className="text-sm text-gray-600">{doctor.rating}</span>
                     </div>
                   </div>
                   
-                  <Button 
-                    onClick={() => generateDifferentialDiagnosis(selectedPatient)}
-                    disabled={isGeneratingDx}
-                    className="w-full"
-                  >
-                    {isGeneratingDx ? (
-                      <>
-                        <Activity className="h-4 w-4 mr-2 animate-spin" />
-                        Analyzing Patient Data...
-                      </>
-                    ) : (
-                      <>
-                        <Brain className="h-4 w-4 mr-2" />
-                        Generate AI Differential Diagnosis
-                      </>
-                    )}
-                  </Button>
-
-                  {differentialDx.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-gray-800">Differential Diagnoses</h4>
-                        <span className="text-xs text-gray-500">Generated {new Date().toLocaleTimeString()}</span>
-                      </div>
-                      {differentialDx.map((dx, idx) => (
-                        <div key={idx} className="p-4 border rounded-lg bg-white shadow-sm">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-semibold text-gray-900">{dx.condition}</h4>
-                            <div className="flex items-center gap-2">
-                              <div className="text-right">
-                                <span className="text-lg font-bold text-blue-600">{dx.probability}%</span>
-                                <p className="text-xs text-gray-500">Confidence</p>
-                              </div>
-                              <div className={`w-3 h-3 rounded-full ${
-                                dx.probability >= 80 ? 'bg-red-500' :
-                                dx.probability >= 60 ? 'bg-orange-500' :
-                                dx.probability >= 40 ? 'bg-yellow-500' :
-                                'bg-green-500'
-                              }`}></div>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="font-medium text-green-700 mb-1">✅ Supporting Evidence:</p>
-                              <ul className="list-disc list-inside text-green-600 space-y-1">
-                                {dx.supportingEvidence.map((evidence, i) => (
-                                  <li key={i}>{evidence}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            
-                            <div>
-                              <p className="font-medium text-blue-700 mb-1">🔬 Recommended Tests:</p>
-                              <ul className="list-disc list-inside text-blue-600 space-y-1">
-                                {dx.recommendedTests.map((test, i) => (
-                                  <li key={i}>{test}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          </div>
-                          
-                          {dx.contraindications && dx.contraindications.length > 0 && (
-                            <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-200">
-                              <p className="font-medium text-yellow-800 text-sm">⚠️ Considerations:</p>
-                              <ul className="list-disc list-inside text-yellow-700 text-sm">
-                                {dx.contraindications.map((contra, i) => (
-                                  <li key={i}>{contra}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  <p className="text-sm text-gray-600 mb-3">{doctor.specialty}</p>
+                  
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-blue-600">{doctor.patientsAssigned}</p>
+                      <p className="text-xs text-gray-500">Patients</p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-lg font-bold text-red-600">{doctor.activeAlerts}</p>
+                      <p className="text-xs text-gray-500">Alerts</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-green-600">{doctor.completedToday}</p>
+                      <p className="text-xs text-gray-500">Completed</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">Last active: {doctor.lastActive}</p>
+                  </div>
                 </div>
-              )}
-            </Card>
-          </div>
-        </>
+              ))}
+            </div>
+          </Card>
+
+          {/* Recent Alerts */}
+          <Card className="p-6 bg-white border-0 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Critical Alerts</h3>
+              <Button variant="outline" size="sm" onClick={() => setActiveTab('alerts')}>
+                View All
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {filteredAlerts.filter(a => a.type === 'critical').slice(0, 3).map((alert) => (
+                <div key={alert.id} className={`p-4 border-l-4 rounded-lg ${getAlertColor(alert.type)}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900">{alert.title}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{alert.description}</p>
+                      <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                        <span>Patient: {alert.patientName}</span>
+                        <span>Doctor: {alert.assignedDoctor}</span>
+                        <span>{new Date(alert.timestamp).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline">
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       )}
 
-      {/* New Patient Dialog */}
-      {showNewPatientDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Add New Patient</h3>
-              <button
-                onClick={() => setShowNewPatientDialog(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            {selectedDoctor && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  <strong>Assigning to:</strong> {selectedDoctor.name} ({selectedDoctor.specialty})
-                </p>
+      {activeTab === 'patients' && (
+        <div className="space-y-6">
+          {/* Search and Filter */}
+          <Card className="p-4 bg-white border-0 shadow-sm">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search patients by name or condition..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
-            )}
+              <select 
+                className="px-3 py-2 border border-gray-300 rounded-md"
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+              >
+                <option value="all">All Priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </Card>
 
+          {/* Patient List */}
+          <Card className="p-6 bg-white border-0 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Patient List ({filteredPatients.length})
+            </h3>
+            <div className="space-y-3">
+              {filteredPatients.map((patient) => (
+                <div key={patient.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{patient.name}</h4>
+                        <p className="text-sm text-gray-600">{patient.age} years, {patient.gender}</p>
+                        <p className="text-sm text-gray-600">{patient.condition}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">{patient.assignedDoctor}</p>
+                        <p className="text-xs text-gray-500">Last visit: {patient.lastVisit}</p>
+                        {patient.nextAppointment && (
+                          <p className="text-xs text-blue-600">Next: {patient.nextAppointment}</p>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor(patient.priority)}`}>
+                          {patient.priority.toUpperCase()}
+                        </span>
+                        {patient.alerts > 0 && (
+                          <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                            {patient.alerts} alerts
+                          </span>
+                        )}
+                      </div>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewPatient(patient)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'alerts' && (
+        <div className="space-y-6">
+          <Card className="p-6 bg-white border-0 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinical Alerts</h3>
+            <div className="space-y-4">
+              {filteredAlerts.map((alert) => (
+                <div key={alert.id} className={`p-4 border-l-4 rounded-lg ${getAlertColor(alert.type)}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h4 className="font-semibold text-gray-900">{alert.title}</h4>
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor(alert.type)}`}>
+                          {alert.type.toUpperCase()}
+                        </span>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          alert.status === 'new' ? 'bg-red-100 text-red-800' :
+                          alert.status === 'acknowledged' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {alert.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{alert.description}</p>
+                      <div className="flex items-center space-x-4 text-xs text-gray-500">
+                        <span>Patient: {alert.patientName}</span>
+                        <span>Doctor: {alert.assignedDoctor}</span>
+                        <span>{new Date(alert.timestamp).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2 ml-4">
+                      <Button size="sm" variant="outline">
+                        Acknowledge
+                      </Button>
+                      <Button size="sm">
+                        Resolve
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'logs' && (
+        <div className="space-y-6">
+          <Card className="p-6 bg-white border-0 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Doctor Update Logs</h3>
+              <div className="flex space-x-3">
+                <Button 
+                  onClick={generateDoctorLogsFromDocuments}
+                  variant="outline"
+                  className="bg-green-50 hover:bg-green-100 border-green-200"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Generate from Documents
+                </Button>
+                <Button 
+                  onClick={() => setShowAddLogModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Log Entry
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {doctorLogs.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500 mb-4">No doctor logs yet.</p>
+                  <div className="flex justify-center space-x-3">
+                    <Button onClick={() => setShowAddLogModal(true)} variant="outline">
+                      Add Manual Entry
+                    </Button>
+                    <Button onClick={generateDoctorLogsFromDocuments} className="bg-blue-600 hover:bg-blue-700">
+                      Generate from Documents
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                doctorLogs.map((log) => (
+                  <div key={log.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{log.title}</h4>
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                          <span>Patient: <span className="font-medium">{log.patientName}</span></span>
+                          <span>Doctor: <span className="font-medium">{log.doctorName}</span></span>
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                          log.type === 'assessment' ? 'bg-blue-100 text-blue-800' :
+                          log.type === 'treatment' ? 'bg-green-100 text-green-800' :
+                          log.type === 'medication' ? 'bg-purple-100 text-purple-800' :
+                          log.type === 'observation' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {log.type.toUpperCase()}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditLog(log)}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteLog(log.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-gray-700 mb-3 leading-relaxed">{log.content}</p>
+                    {log.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {log.tags.map((tag, index) => (
+                          <span key={index} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="p-6 bg-white border-0 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Priority Distribution</h3>
+              <div className="space-y-4">
+                {['critical', 'high', 'medium', 'low'].map((priority) => {
+                  const count = patients.filter(p => p.priority === priority).length
+                  const percentage = patients.length > 0 ? (count / patients.length) * 100 : 0
+                  return (
+                    <div key={priority} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 capitalize">{priority}</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full ${
+                              priority === 'critical' ? 'bg-red-500' :
+                              priority === 'high' ? 'bg-orange-500' :
+                              priority === 'medium' ? 'bg-yellow-500' :
+                              'bg-green-500'
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium">{count}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-6 bg-white border-0 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Total Doctors</span>
+                  <span className="text-sm font-medium">{doctors.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Available Doctors</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    <span className="text-sm font-medium">{doctors.filter(d => d.status === 'available').length}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Active Alerts</span>
+                  <span className="text-sm font-medium text-red-600">{alerts.filter(a => a.status === 'new').length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Data Security</span>
+                  <div className="flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-green-500" />
+                    <span className="text-sm">HIPAA Compliant</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Patient Modal */}
+      {showPatientModal && selectedPatient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Patient Details</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowPatientModal(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Name</label>
+                  <p className="text-gray-900">{selectedPatient.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Age</label>
+                  <p className="text-gray-900">{selectedPatient.age} years</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Gender</label>
+                  <p className="text-gray-900">{selectedPatient.gender}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Priority</label>
+                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor(selectedPatient.priority)}`}>
+                    {selectedPatient.priority.toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Condition</label>
+                  <p className="text-gray-900">{selectedPatient.condition}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Assigned Doctor</label>
+                  <p className="text-gray-900">{selectedPatient.assignedDoctor}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Last Visit</label>
+                  <p className="text-gray-900">{selectedPatient.lastVisit}</p>
+                </div>
+                {selectedPatient.nextAppointment && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Next Appointment</label>
+                    <p className="text-gray-900">{selectedPatient.nextAppointment}</p>
+                  </div>
+                )}
+              </div>
+              
+              {selectedPatient.alerts > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="font-medium text-red-800 mb-2">Active Alerts</h4>
+                  <p className="text-red-700">This patient has {selectedPatient.alerts} active clinical alerts requiring attention.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Log Modal */}
+      {showAddLogModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Add Doctor Log Entry</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddLogModal(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Patient Name *
-                </label>
-                <input
-                  type="text"
-                  value={newPatientData.name}
-                  onChange={(e) => setNewPatientData({...newPatientData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter patient full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Age
-                </label>
-                <input
-                  type="number"
-                  value={newPatientData.age}
-                  onChange={(e) => setNewPatientData({...newPatientData, age: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter age"
-                  min="0"
-                  max="120"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Medical Conditions
-                </label>
-                <input
-                  type="text"
-                  value={newPatientData.conditions}
-                  onChange={(e) => setNewPatientData({...newPatientData, conditions: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Diabetes, Hypertension (comma-separated)"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Risk Level
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Patient</label>
                 <select
-                  value={newPatientData.riskLevel}
-                  onChange={(e) => setNewPatientData({...newPatientData, riskLevel: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={newLog.patientId}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, patientId: e.target.value }))}
                 >
-                  <option value="low">Low Risk</option>
-                  <option value="medium">Medium Risk</option>
-                  <option value="high">High Risk</option>
-                  <option value="critical">Critical Risk</option>
+                  <option value="">Select a patient</option>
+                  {patients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} - {patient.condition}
+                    </option>
+                  ))}
                 </select>
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Log Type</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={newLog.type}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, type: e.target.value as any }))}
+                >
+                  <option value="assessment">Assessment</option>
+                  <option value="treatment">Treatment</option>
+                  <option value="medication">Medication</option>
+                  <option value="observation">Observation</option>
+                  <option value="discharge">Discharge</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Brief title for this log entry"
+                  value={newLog.title}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, title: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md h-32"
+                  placeholder="Detailed log entry content..."
+                  value={newLog.content}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, content: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {newLog.tags.map((tag, index) => (
+                    <span key={index} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded flex items-center">
+                      #{tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 text-blue-600 hover:text-blue-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Add a tag"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addTag(e.currentTarget.value)
+                        e.currentTarget.value = ''
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const input = document.querySelector('input[placeholder="Add a tag"]') as HTMLInputElement
+                      if (input?.value) {
+                        addTag(input.value)
+                        input.value = ''
+                      }
+                    }}
+                  >
+                    Add Tag
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button variant="outline" onClick={() => setShowAddLogModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddDoctorLog} className="bg-blue-600 hover:bg-blue-700">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Log Entry
+                </Button>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="flex gap-3 mt-6">
-              <Button
-                onClick={() => setShowNewPatientDialog(false)}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
+      {/* Edit Log Modal */}
+      {showEditLogModal && editingLog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Doctor Log Entry</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowEditLogModal(false)}>
+                <X className="h-4 w-4" />
               </Button>
-              <Button
-                onClick={handleAddNewPatient}
-                className="flex-1"
-                disabled={!newPatientData.name.trim()}
-              >
-                <Stethoscope className="h-4 w-4 mr-2" />
-                Add Patient
-              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Patient</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  value={editingLog.patientName}
+                  disabled
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Doctor</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  value={editingLog.doctorName}
+                  disabled
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Log Type</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={newLog.type}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, type: e.target.value as any }))}
+                >
+                  <option value="assessment">Assessment</option>
+                  <option value="treatment">Treatment</option>
+                  <option value="medication">Medication</option>
+                  <option value="observation">Observation</option>
+                  <option value="discharge">Discharge</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Brief title for this log entry"
+                  value={newLog.title}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, title: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md h-32"
+                  placeholder="Detailed log entry content..."
+                  value={newLog.content}
+                  onChange={(e) => setNewLog(prev => ({ ...prev, content: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {newLog.tags.map((tag, index) => (
+                    <span key={index} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded flex items-center">
+                      #{tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 text-blue-600 hover:text-blue-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Add a tag"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addTag(e.currentTarget.value)
+                        e.currentTarget.value = ''
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const input = document.querySelectorAll('input[placeholder="Add a tag"]')[1] as HTMLInputElement
+                      if (input?.value) {
+                        addTag(input.value)
+                        input.value = ''
+                      }
+                    }}
+                  >
+                    Add Tag
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button variant="outline" onClick={() => setShowEditLogModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateLog} className="bg-green-600 hover:bg-green-700">
+                  <Save className="h-4 w-4 mr-2" />
+                  Update Log Entry
+                </Button>
+              </div>
             </div>
           </div>
         </div>
