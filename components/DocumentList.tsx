@@ -28,10 +28,22 @@ export function DocumentList({ viewMode, onSelectDocument, documents: propDocume
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    console.log('[DocumentList] Props changed:', { 
+      propDocuments: propDocuments?.length, 
+      propDocumentsTypes: propDocuments?.map(d => d.type) 
+    })
+    
     if (propDocuments && Array.isArray(propDocuments)) {
-      setDocuments(propDocuments)
+      // Ensure dates are properly converted
+      const processedDocs = propDocuments.map(doc => ({
+        ...doc,
+        date: new Date(doc.date)
+      }))
+      setDocuments(processedDocs)
       setIsLoading(false)
+      console.log('[DocumentList] Using prop documents:', processedDocs.length)
     } else {
+      console.log('[DocumentList] Fetching documents from API')
       fetchDocuments()
     }
   }, [propDocuments])
@@ -86,6 +98,15 @@ export function DocumentList({ viewMode, onSelectDocument, documents: propDocume
     : selectedCategory === 'all' 
       ? safeDocuments 
       : safeDocuments.filter(doc => doc.type === selectedCategory)
+
+  // Debug logging for Vercel
+  console.log('[DocumentList] Display logic:', {
+    hasPropDocuments: !!propDocuments,
+    propDocumentsLength: propDocuments?.length,
+    safeDocumentsLength: safeDocuments.length,
+    displayDocumentsLength: displayDocuments.length,
+    displayDocumentsTypes: displayDocuments.map(d => d.type)
+  })
 
   if (isLoading) {
     return (

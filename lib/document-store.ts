@@ -47,6 +47,16 @@ const demoDocuments: StoredDocument[] = [
     hospital: 'Emergency Care Hospital',
     summary: 'Emergency room visit for acute chest pain. Total amount: $1,250',
     tags: ['emergency', 'chest pain', 'billing']
+  },
+  {
+    id: '4',
+    name: 'MRI Scan Report - Brain',
+    type: 'test_report',
+    date: new Date('2024-04-05'),
+    doctor: 'Dr. Emily Rodriguez',
+    hospital: 'Advanced Imaging Center',
+    summary: 'Brain MRI scan shows no abnormalities. Normal brain structure and function.',
+    tags: ['MRI', 'brain scan', 'radiology', 'normal']
   }
 ]
 

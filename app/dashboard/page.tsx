@@ -383,7 +383,15 @@ export default function Dashboard() {
       const expectedFiltered = safeDocuments.filter((doc: any) => doc.type === selectedCategory)
       console.log(`[Dashboard] Expected filtered count: ${expectedFiltered.length}`)
       console.log(`[Dashboard] Actual filtered count: ${filteredDocuments.length}`)
+      console.log(`[Dashboard] Expected filtered docs:`, expectedFiltered.map(d => ({ name: d.name, type: d.type })))
+      console.log(`[Dashboard] Actual filtered docs:`, filteredDocuments.map(d => ({ name: d.name, type: d.type })))
     }
+    
+    // Additional debugging for Vercel
+    console.log(`[Dashboard] Filter comparison - Category: "${selectedCategory}"`)
+    safeDocuments.forEach((doc: any, index: number) => {
+      console.log(`[Dashboard] Doc ${index}: "${doc.name}" - Type: "${doc.type}" - Matches: ${doc.type === selectedCategory}`)
+    })
   }, [selectedCategory, safeDocuments.length, filteredDocuments.length])
 
   // Ensure category state persists and is valid
