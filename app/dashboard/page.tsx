@@ -371,6 +371,63 @@ export default function Dashboard() {
     ? safeDocuments 
     : safeDocuments.filter((doc: any) => doc.type === selectedCategory)
 
+  // Debug logging for category filtering
+  useEffect(() => {
+    console.log(`[Dashboard] Category changed to: ${selectedCategory}`)
+    console.log(`[Dashboard] Total documents: ${safeDocuments.length}`)
+    console.log(`[Dashboard] Filtered documents: ${filteredDocuments.length}`)
+    console.log(`[Dashboard] Document types:`, safeDocuments.map(doc => doc.type))
+    
+    // Log to verify the filtering is working
+    if (selectedCategory !== 'all') {
+      const expectedFiltered = safeDocuments.filter((doc: any) => doc.type === selectedCategory)
+      console.log(`[Dashboard] Expected filtered count: ${expectedFiltered.length}`)
+      console.log(`[Dashboard] Actual filtered count: ${filteredDocuments.length}`)
+    }
+  }, [selectedCategory, safeDocuments.length, filteredDocuments.length])
+
+  // Ensure category state persists and is valid
+  useEffect(() => {
+    // Validate selectedCategory is valid
+    const validCategories = ['all', 'lab_report', 'prescription', 'bill', 'test_report']
+    if (!validCategories.includes(selectedCategory)) {
+      console.warn(`[Dashboard] Invalid category: ${selectedCategory}, resetting to 'all'`)
+      setSelectedCategory('all')
+    }
+  }, [selectedCategory])
+
+  // Helper function to get category colors (fixes Vercel production CSS issues)
+  const getCategoryColors = (color: string, isSelected: boolean) => {
+    const colorMap = {
+      blue: {
+        bg: isSelected ? 'bg-blue-100' : 'bg-gray-100 group-hover:bg-gray-200',
+        text: isSelected ? 'text-blue-600' : 'text-gray-500',
+        badge: 'bg-blue-100 text-blue-800'
+      },
+      red: {
+        bg: isSelected ? 'bg-red-100' : 'bg-gray-100 group-hover:bg-gray-200',
+        text: isSelected ? 'text-red-600' : 'text-gray-500',
+        badge: 'bg-red-100 text-red-800'
+      },
+      green: {
+        bg: isSelected ? 'bg-green-100' : 'bg-gray-100 group-hover:bg-gray-200',
+        text: isSelected ? 'text-green-600' : 'text-gray-500',
+        badge: 'bg-green-100 text-green-800'
+      },
+      yellow: {
+        bg: isSelected ? 'bg-yellow-100' : 'bg-gray-100 group-hover:bg-gray-200',
+        text: isSelected ? 'text-yellow-600' : 'text-gray-500',
+        badge: 'bg-yellow-100 text-yellow-800'
+      },
+      purple: {
+        bg: isSelected ? 'bg-purple-100' : 'bg-gray-100 group-hover:bg-gray-200',
+        text: isSelected ? 'text-purple-600' : 'text-gray-500',
+        badge: 'bg-purple-100 text-purple-800'
+      }
+    }
+    return colorMap[color as keyof typeof colorMap] || colorMap.blue
+  }
+
   // Navigation items
   const navigationSections = [
     {
@@ -690,10 +747,16 @@ export default function Dashboard() {
                   ].map((category) => {
                     const Icon = category.icon
                     const isSelected = selectedCategory === category.id
+                    
+                    const colorClasses = getCategoryColors(category.color, isSelected)
+                    
                     return (
                       <button
                         key={category.id}
-                        onClick={() => setSelectedCategory(category.id)}
+                        onClick={() => {
+                          console.log(`[Dashboard] Category selected: ${category.id}`)
+                          setSelectedCategory(category.id)
+                        }}
                         className={`
                           w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-sm group
                           ${isSelected 
@@ -703,27 +766,13 @@ export default function Dashboard() {
                         `}
                       >
                         <div className="flex items-center space-x-3">
-                          <div className={`
-                            w-8 h-8 rounded-lg flex items-center justify-center transition-colors
-                            ${isSelected 
-                              ? `bg-${category.color}-100` 
-                              : 'bg-gray-100 group-hover:bg-gray-200'
-                            }
-                          `}>
-                            <Icon className={`h-4 w-4 ${isSelected ? `text-${category.color}-600` : 'text-gray-500'}`} />
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${colorClasses.bg}`}>
+                            <Icon className={`h-4 w-4 ${colorClasses.text}`} />
                           </div>
                           <span className="font-medium">{category.label}</span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className={`
-                            px-2 py-1 text-xs rounded-full font-medium
-                            ${category.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                              category.color === 'red' ? 'bg-red-100 text-red-800' :
-                              category.color === 'green' ? 'bg-green-100 text-green-800' :
-                              category.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-purple-100 text-purple-800'
-                            }
-                          `}>
+                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${colorClasses.badge}`}>
                             {category.count}
                           </span>
                         </div>
@@ -1174,6 +1223,7 @@ export default function Dashboard() {
                   <Card className="p-6 bg-white border-0 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-900 mb-6">Recently Uploaded</h3>
                     <DocumentList 
+                      key={`${selectedCategory}-${filteredDocuments.length}`}
                       documents={filteredDocuments.slice(0, 8)} 
                       viewMode="grid"
                       onSelectDocument={(doc) => setSelectedDocument(doc)}
@@ -1236,6 +1286,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <DocumentList 
+                    key={`${selectedCategory}-${filteredDocuments.length}`}
                     documents={filteredDocuments} 
                     viewMode={viewMode}
                     onSelectDocument={(doc) => setSelectedDocument(doc)}
