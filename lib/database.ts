@@ -6,21 +6,35 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Create Prisma client with optimized configuration
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasources: {
-    db: {
-      url: process.env.POSTGRES_PRISMA_URL
-    }
-  }
-})
+// Check if database connection is available
+const isDatabaseAvailable = () => {
+  return !!(process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL)
+}
+
+// Create Prisma client with optimized configuration only if database is available
+export const prisma = isDatabaseAvailable() 
+  ? (globalForPrisma.prisma ?? new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL
+        }
+      }
+    }))
+  : null
 
 // Prevent multiple instances in development
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+if (process.env.NODE_ENV !== 'production' && prisma) {
+  globalForPrisma.prisma = prisma
+}
 
 // Database connection helper
 export async function connectToDatabase() {
+  if (!prisma) {
+    console.log('⚠️ Database not configured, running in demo mode')
+    return false
+  }
+  
   try {
     await prisma.$connect()
     console.log('✅ Connected to PostgreSQL database')
@@ -33,6 +47,11 @@ export async function connectToDatabase() {
 
 // Graceful shutdown
 export async function disconnectFromDatabase() {
+  if (!prisma) {
+    console.log('⚠️ No database connection to disconnect')
+    return
+  }
+  
   try {
     await prisma.$disconnect()
     console.log('✅ Disconnected from database')
@@ -43,6 +62,14 @@ export async function disconnectFromDatabase() {
 
 // Database health check
 export async function checkDatabaseHealth() {
+  if (!prisma) {
+    return { 
+      status: 'unavailable', 
+      message: 'Database not configured - running in demo mode',
+      timestamp: new Date().toISOString() 
+    }
+  }
+  
   try {
     await prisma.$queryRaw`SELECT 1`
     return { status: 'healthy', timestamp: new Date().toISOString() }
@@ -57,13 +84,21 @@ export async function checkDatabaseHealth() {
 
 // Utility functions for medical data
 export class MedicalDatabase {
+  // Helper method to check if database is available
+  private static isDatabaseAvailable(): boolean {
+    return prisma !== null
+  }
+
   // User management
   static async createUser(data: {
     email: string
     name?: string
     role?: 'PATIENT' | 'DOCTOR' | 'NURSE' | 'ADMIN'
   }) {
-    return await prisma.user.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.user.create({
       data,
       include: {
         patientProfile: true,
@@ -73,7 +108,10 @@ export class MedicalDatabase {
   }
 
   static async getUserWithProfile(userId: string) {
-    return await prisma.user.findUnique({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.user.findUnique({
       where: { id: userId },
       include: {
         patientProfile: {
@@ -105,7 +143,10 @@ export class MedicalDatabase {
     date?: Date
     tags?: string[]
   }) {
-    return await prisma.document.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.document.create({
       data: {
         ...data,
         type: data.type as any,
@@ -115,7 +156,10 @@ export class MedicalDatabase {
   }
 
   static async getDocumentsByUser(userId: string, limit = 50) {
-    return await prisma.document.findMany({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.document.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -127,7 +171,10 @@ export class MedicalDatabase {
   }
 
   static async searchDocuments(userId: string, query: string) {
-    return await prisma.document.findMany({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.document.findMany({
       where: {
         userId,
         OR: [
@@ -154,7 +201,10 @@ export class MedicalDatabase {
     measuredBy?: string
     notes?: string
   }) {
-    return await prisma.vitalSigns.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.vitalSigns.create({
       data: {
         patientId,
         ...data
@@ -172,7 +222,10 @@ export class MedicalDatabase {
     labName?: string
     collectedAt?: Date
   }) {
-    return await prisma.labResult.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.labResult.create({
       data: {
         patientId,
         status: 'NORMAL',
@@ -193,7 +246,10 @@ export class MedicalDatabase {
     endDate?: Date
     notes?: string
   }) {
-    return await prisma.medication.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.medication.create({
       data: {
         patientId,
         status: 'ACTIVE',
@@ -204,7 +260,10 @@ export class MedicalDatabase {
 
   // Clinical decision support
   static async getDrugInteractions(medications: string[]) {
-    return await prisma.drugInteraction.findMany({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.drugInteraction.findMany({
       where: {
         OR: medications.flatMap(med1 => 
           medications.map(med2 => ({
@@ -219,7 +278,10 @@ export class MedicalDatabase {
   }
 
   static async getClinicalGuidelines(condition: string) {
-    return await prisma.clinicalGuideline.findMany({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.clinicalGuideline.findMany({
       where: {
         condition: { contains: condition, mode: 'insensitive' }
       },
@@ -229,6 +291,9 @@ export class MedicalDatabase {
 
   // Analytics and reporting
   static async getPatientSummaryStats(patientId: string) {
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
     const [
       totalDocuments,
       recentVitals,
@@ -236,21 +301,21 @@ export class MedicalDatabase {
       activeMedications,
       upcomingAppointments
     ] = await Promise.all([
-      prisma.document.count({ where: { userId: patientId } }),
-      prisma.vitalSigns.count({ 
+      prisma!.document.count({ where: { userId: patientId } }),
+      prisma!.vitalSigns.count({ 
         where: { 
           patientId,
           createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
         }
       }),
-      prisma.patientProfile.findUnique({
+      prisma!.patientProfile.findUnique({
         where: { userId: patientId },
         select: { conditions: true }
       }),
-      prisma.medication.count({
+      prisma!.medication.count({
         where: { patientId, status: 'ACTIVE' }
       }),
-      prisma.appointment.count({
+      prisma!.appointment.count({
         where: {
           patientId,
           scheduledAt: { gte: new Date() },
@@ -270,7 +335,10 @@ export class MedicalDatabase {
 
   // Activity logging
   static async logActivity(userId: string, action: string, description: string, documentId?: string, metadata?: any) {
-    return await prisma.activity.create({
+    if (!this.isDatabaseAvailable()) {
+      throw new Error('Database not available - running in demo mode')
+    }
+    return await prisma!.activity.create({
       data: {
         userId,
         action: action as any,

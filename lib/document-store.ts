@@ -57,6 +57,12 @@ let persistentStorage: StoredDocument[] = []
 export async function getDocuments(userId?: string): Promise<StoredDocument[]> {
   console.log('[Storage] Getting documents...')
   
+  // Check if database connection is available
+  if (!process.env.POSTGRES_URL && !process.env.POSTGRES_PRISMA_URL) {
+    console.log('[Storage] No database connection configured, using demo data')
+    return [...demoDocuments, ...persistentStorage]
+  }
+  
   // Try to get from Vercel Postgres first
   try {
     await initializeDatabase()
@@ -86,7 +92,7 @@ export async function getDocuments(userId?: string): Promise<StoredDocument[]> {
   
   // Fallback to demo documents
   const allDocuments = [...demoDocuments, ...persistentStorage]
-  console.log(`[Storage] Returning ${allDocuments.length} documents`)
+  console.log(`[Storage] Returning ${allDocuments.length} documents from demo data`)
   return allDocuments
 }
 
@@ -135,6 +141,15 @@ export async function saveDocument(doc: Omit<StoredDocument, 'id'> & { originalF
   
   // Remove the file object before storing
   const { originalFile, ...docToStore } = doc as any
+  
+  // Check if database connection is available
+  if (!process.env.POSTGRES_URL && !process.env.POSTGRES_PRISMA_URL) {
+    console.log('[Storage] No database connection, saving to local storage')
+    persistentStorage.push(newDoc)
+    documentsCache.push(newDoc)
+    console.log('[Storage] Document saved to local storage successfully')
+    return newDoc
+  }
   
   // Try to save to Vercel Postgres first
   try {
