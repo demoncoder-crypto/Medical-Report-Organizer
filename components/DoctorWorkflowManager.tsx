@@ -69,7 +69,7 @@ export class DoctorWorkflowManager extends Component<{}, DoctorWorkflowState> {
       patientQueue: [
         {
           id: '1',
-          name: 'Sarah Johnson',
+          name: 'Jane Demo',
           age: 52,
           gender: 'Female',
           chiefComplaint: 'Diabetes follow-up, blood sugar management',
@@ -82,7 +82,7 @@ export class DoctorWorkflowManager extends Component<{}, DoctorWorkflowState> {
         },
         {
           id: '2',
-          name: 'Robert Chen',
+          name: 'Alex Sample',
           age: 58,
           gender: 'Male',
           chiefComplaint: 'Kidney function monitoring, CKD stage 3',

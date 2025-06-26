@@ -108,7 +108,7 @@ export default function Dashboard() {
         id: 'notif-1',
         type: 'critical',
         title: 'Critical Patient Alert',
-        message: 'WS DHILLON has critical GFR levels requiring immediate attention',
+        message: 'David Wilson has critical GFR levels requiring immediate attention',
         timestamp: new Date(Date.now() - 5 * 60000).toISOString(),
         read: false,
         action: () => setActiveSection('clinical')
@@ -117,7 +117,7 @@ export default function Dashboard() {
         id: 'notif-2',
         type: 'high',
         title: 'Lab Results Available',
-        message: 'New lab results for Robert Chen show elevated creatinine levels',
+        message: 'New lab results for Alex Sample show elevated creatinine levels',
         timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
         read: false,
         action: () => setActiveSection('clinical')

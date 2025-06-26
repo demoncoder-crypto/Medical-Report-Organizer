@@ -38,7 +38,7 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
   const [realDataLoaded, setRealDataLoaded] = useState(false)
   
   // Timeline-specific state
-  const [selectedPatient, setSelectedPatient] = useState('sarah-johnson')
+  const [selectedPatient, setSelectedPatient] = useState('demo-patient-1')
   const [timeRange, setTimeRange] = useState('6months')
   const [eventTypes, setEventTypes] = useState({
     labResults: true,
@@ -50,8 +50,8 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
 
   // Patient data for timeline
   const patientData = {
-    'sarah-johnson': {
-      name: 'Sarah Johnson',
+    'demo-patient-1': {
+      name: 'Jane Demo',
       age: 52,
       status: 'High Risk',
       conditions: ['Type 2 Diabetes', 'Hypertension', 'Obesity'],
@@ -82,8 +82,8 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
         }
       ]
     },
-    'robert-chen': {
-      name: 'Robert Chen',
+    'demo-patient-2': {
+      name: 'Alex Sample',
       age: 58,
       status: 'Moderate Risk',
       conditions: ['CKD Stage 3', 'Hypertension', 'Hyperlipidemia'],
@@ -918,7 +918,7 @@ export function MedicalIntelligence({ documents }: MedicalIntelligenceProps) {
               </div>
             </div>
 
-            {/* Real Patient Analysis - WS DHILLON */}
+            {/* Real Patient Analysis - David Wilson */}
             {(() => {
               const criticalPatients = Object.values(getAllPatients()).filter((p: any) => p.status === 'Critical')
               const highRiskPatients = Object.values(getAllPatients()).filter((p: any) => p.status === 'High Risk')

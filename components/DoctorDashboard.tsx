@@ -160,7 +160,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
   const mockPatients: Patient[] = [
     {
       id: 'patient-1',
-      name: 'Sarah Johnson',
+      name: 'Jane Demo',
       age: 52,
       gender: 'Female',
       assignedDoctor: 'Dr. Sarah Smith',
@@ -172,7 +172,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     },
     {
       id: 'patient-2',
-      name: 'Robert Chen',
+      name: 'Alex Sample',
       age: 58,
       gender: 'Male',
       assignedDoctor: 'Dr. Michael Williams',
@@ -184,7 +184,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     },
     {
       id: 'patient-3',
-      name: 'WS DHILLON',
+      name: 'David Wilson',
       age: 65,
       gender: 'Male',
       assignedDoctor: 'Dr. Michael Williams',
@@ -199,7 +199,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     {
       id: 'alert-1',
       patientId: 'patient-3',
-      patientName: 'WS DHILLON',
+      patientName: 'David Wilson',
       type: 'critical',
       title: 'Critical GFR Level',
       description: 'GFR is 7 mL/min indicating severe kidney disease. Immediate intervention required.',
@@ -210,7 +210,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     {
       id: 'alert-2',
       patientId: 'patient-2',
-      patientName: 'Robert Chen',
+      patientName: 'Alex Sample',
       type: 'high',
       title: 'Elevated Creatinine',
       description: 'Creatinine levels trending upward. Monitor closely and consider medication adjustment.',
@@ -221,7 +221,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     {
       id: 'alert-3',
       patientId: 'patient-1',
-      patientName: 'Sarah Johnson',
+      patientName: 'Jane Demo',
       type: 'high',
       title: 'Poor Diabetes Control',
       description: 'HbA1c is 9.2% indicating poor diabetes control. Medication review needed.',
@@ -236,7 +236,7 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     {
       id: 'log-1',
       patientId: 'patient-3',
-      patientName: 'WS DHILLON',
+      patientName: 'David Wilson',
       doctorId: 'dr-williams',
       doctorName: 'Dr. Michael Williams',
       timestamp: '2025-06-25T14:30:00Z',
@@ -248,55 +248,55 @@ export function DoctorDashboard({ documents = [] }: DoctorDashboardProps) {
     {
       id: 'log-2',
       patientId: 'patient-2',
-      patientName: 'Robert Chen',
+      patientName: 'Alex Sample',
       doctorId: 'dr-williams',
       doctorName: 'Dr. Michael Williams',
-      timestamp: '2025-06-24T11:15:00Z',
-      type: 'medication',
-      title: 'ACE Inhibitor Adjustment',
-      content: 'Increased Lisinopril from 10mg to 20mg daily due to suboptimal blood pressure control. Patient tolerated previous dose well without significant side effects. Will monitor renal function closely given CKD Stage 3. Follow-up in 2 weeks to assess response.',
-      tags: ['medication', 'hypertension', 'ACE-inhibitor', 'CKD']
+      timestamp: '2025-06-18T14:30:00Z',
+      type: 'assessment',
+      title: 'Kidney Function Assessment',
+      content: 'Patient shows stable kidney function with GFR of 45 mL/min. Current medications are well tolerated. Blood pressure control is excellent at 128/78. Continue current ACE inhibitor therapy. Patient educated on dietary modifications for CKD stage 3. Next follow-up in 3 months with repeat labs.',
+      tags: ['nephrology', 'CKD', 'assessment', 'stable']
     },
     {
       id: 'log-3',
       patientId: 'patient-1',
-      patientName: 'Sarah Johnson',
+      patientName: 'Jane Demo',
       doctorId: 'dr-smith',
       doctorName: 'Dr. Sarah Smith',
-      timestamp: '2025-06-23T09:45:00Z',
+      timestamp: '2025-06-20T09:15:00Z',
       type: 'treatment',
       title: 'Diabetes Management Plan Update',
-      content: 'HbA1c remains elevated at 9.2% despite current regimen. Adding Ozempic 0.25mg weekly to current Metformin therapy. Patient educated on injection technique and potential side effects. Referred to diabetes educator for comprehensive lifestyle counseling. Target HbA1c <7%.',
-      tags: ['diabetes', 'HbA1c', 'GLP-1', 'lifestyle']
+      content: 'HbA1c remains elevated at 9.2% despite current therapy. Discussed medication intensification options with patient. Increased Metformin to 1000mg twice daily. Added lifestyle counseling referral. Patient agrees to glucose monitoring 4x daily. Follow-up in 6 weeks to assess response.',
+      tags: ['diabetes', 'medication-adjustment', 'lifestyle', 'monitoring']
     },
     {
       id: 'log-4',
       patientId: 'patient-1',
-      patientName: 'Sarah Johnson',
+      patientName: 'Jane Demo',
       doctorId: 'dr-smith',
       doctorName: 'Dr. Sarah Smith',
-      timestamp: '2025-06-20T16:20:00Z',
-      type: 'observation',
-      title: 'Weight Management Progress',
-      content: 'Patient has lost 3 lbs since last visit. Reports improved dietary compliance and regular exercise 3x/week. Blood pressure improved to 138/85 from previous 145/92. Encouraged to continue current lifestyle modifications. Consider reducing antihypertensive if trend continues.',
-      tags: ['weight-loss', 'lifestyle', 'blood-pressure', 'progress']
+      timestamp: '2025-05-15T11:00:00Z',
+      type: 'medication',
+      title: 'Antihypertensive Therapy Initiation',
+      content: 'Started Lisinopril 10mg daily for blood pressure control. Patient educated on potential side effects including dry cough and hyperkalemia. Baseline potassium and creatinine levels normal. Patient to monitor blood pressure at home and return in 2 weeks for follow-up.',
+      tags: ['hypertension', 'ACE-inhibitor', 'monitoring', 'education']
     },
     {
       id: 'log-5',
       patientId: 'patient-2',
-      patientName: 'Robert Chen',
+      patientName: 'Alex Sample',
       doctorId: 'dr-williams',
       doctorName: 'Dr. Michael Williams',
-      timestamp: '2025-06-18T13:10:00Z',
-      type: 'assessment',
+      timestamp: '2025-04-10T16:45:00Z',
+      type: 'observation',
       title: 'CKD Progression Monitoring',
-      content: 'Creatinine trending upward from 1.6 to 1.8 mg/dL over past 3 months. GFR decreased from 50 to 45 mL/min. Patient counseled on CKD progression and importance of blood pressure control. Discussed potential need for nephrology referral if further decline.',
-      tags: ['CKD', 'progression', 'creatinine', 'monitoring']
+      content: 'Patient demonstrates good understanding of CKD management. Dietary compliance improved with reduced protein intake. Weight stable, no signs of fluid retention. Lab trends show stable kidney function over past 6 months. Continue current management approach.',
+      tags: ['CKD', 'dietary-compliance', 'monitoring', 'stable']
     },
     {
       id: 'log-6',
       patientId: 'patient-3',
-      patientName: 'WS DHILLON',
+      patientName: 'David Wilson',
       doctorId: 'dr-williams',
       doctorName: 'Dr. Michael Williams',
       timestamp: '2025-06-15T10:00:00Z',

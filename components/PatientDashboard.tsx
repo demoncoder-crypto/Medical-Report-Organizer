@@ -83,21 +83,21 @@ interface PatientDashboardProps {
 }
 
 export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
-  const [selectedPatient, setSelectedPatient] = useState<string>('sarah-johnson')
+  const [selectedPatient, setSelectedPatient] = useState<string>('demo-patient-1')
   const [activeTab, setActiveTab] = useState<'overview' | 'medical-history' | 'lab-results' | 'appointments' | 'documents' | 'doctor-workflow'>('overview')
 
   // Mock patient data
   const mockPatients: Record<string, PatientData> = {
-    'sarah-johnson': {
-      id: 'sarah-johnson',
-      name: 'Sarah Johnson',
+    'demo-patient-1': {
+      id: 'demo-patient-1',
+      name: 'Jane Demo',
       age: 52,
       dateOfBirth: '1971-08-15',
       gender: 'Female',
       bloodType: 'A+',
       allergies: ['Penicillin', 'Shellfish'],
       emergencyContact: {
-        name: 'Michael Johnson',
+        name: 'John Demo',
         phone: '(555) 123-4567',
         relationship: 'Spouse'
       },
@@ -190,16 +190,16 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
         }
       ]
     },
-    'robert-chen': {
-      id: 'robert-chen',
-      name: 'Robert Chen',
+    'demo-patient-2': {
+      id: 'demo-patient-2',
+      name: 'Alex Sample',
       age: 58,
       dateOfBirth: '1965-03-22',
       gender: 'Male',
       bloodType: 'O-',
       allergies: ['Aspirin'],
       emergencyContact: {
-        name: 'Linda Chen',
+        name: 'Maria Sample',
         phone: '(555) 987-6543',
         relationship: 'Wife'
       },
@@ -665,7 +665,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
       const allPatients = { ...mockPatients }
       delete allPatients['real-patient']
       setPatients(allPatients)
-      setSelectedPatient('sarah-johnson')
+      setSelectedPatient('demo-patient-1')
       alert('🗑️ Real patient data cleared! Reset to demo data.')
     }
   }
@@ -688,7 +688,7 @@ export function PatientDashboard({ documents = [] }: PatientDashboardProps) {
   }, [])
 
   const getCurrentPatient = (): PatientData => {
-    return patients[selectedPatient] || patients['sarah-johnson'] || mockPatients['sarah-johnson']
+    return patients[selectedPatient] || patients['demo-patient-1'] || mockPatients['demo-patient-1']
   }
 
   const currentPatient = getCurrentPatient()
